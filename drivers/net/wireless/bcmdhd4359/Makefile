@@ -1,23 +1,5 @@
 #
-# Copyright (C) 1999-2015, Broadcom Corporation
-# 
-#      Unless you and Broadcom execute a separate written software license
-# agreement governing use of this software, this software is licensed to you
-# under the terms of the GNU General Public License version 2 (the "GPL"),
-# available at http://www.broadcom.com/licenses/GPLv2.php, with the
-# following added to such license:
-# 
-#      As a special exception, the copyright holders of this software give you
-# permission to link this software with independent modules, and to copy and
-# distribute the resulting executable under terms of your choice, provided that
-# you also meet, for each linked independent module, the terms and conditions of
-# the license of that module.  An independent module is a module which is not
-# derived from this software.  The special exception does not apply to any
-# modifications of the software.
-# 
-#      Notwithstanding the above, under no circumstances may you combine this
-# software in any way with any other Broadcom software provided under a license
-# other than the GPL, without Broadcom's express prior written consent.
+# $ Copyright Open Broadcom Corporation $
 #
 #
 # <<Broadcom-WL-IPTag/Open:>>
@@ -80,12 +62,6 @@ ifeq ($(BUS_IFACE_PCIE),y)
 	DHDCFLAGS += -DDHD_FW_COREDUMP
 	# Enable PKTID AUDIT
 	DHDCFLAGS += -DDHD_PKTID_AUDIT_ENABLED
-	# Enable Load Balancing support by default.
-	# DHD_LB_RXP - Perform RX Packet processing in parallel
-	# DHD_LB_STATS - To display the Load Blancing statistics
-	DHDCFLAGS += -DDHD_LB -DDHD_LB_RXP -DDHD_LB_STATS
-	# Enable wakelock for legacy scan
-	DHDCFLAGS += -DDHD_USE_SCAN_WAKELOCK
 endif
 
 
@@ -127,7 +103,6 @@ DHDCFLAGS += -DCUSTOM_TDLS_RSSI_THRESHOLD_LOW=-85
 DHDCFLAGS += -DROAM_AP_ENV_DETECTION
 DHDCFLAGS += -DROAM_ENABLE -DROAM_CHANNEL_CACHE -DROAM_API
 DHDCFLAGS += -DENABLE_FW_ROAM_SUSPEND
-DHDCFLAGS += -DDHD_LOSSLESS_ROAMING
 
 # CCX
 ifeq ($(CONFIG_BRCM_CCX),y)
@@ -170,8 +145,6 @@ ifeq ($(CONFIG_BROADCOM_WIFI_RESERVED_MEM),y)
   DHDCFLAGS += -DENHANCED_STATIC_BUF
   DHDCFLAGS += -DSTATIC_WL_PRIV_STRUCT
 ifeq ($(BUS_IFACE_PCIE),y)
-  # Use preallocated IOCTL and EVENT buffer
-  DHDCFLAGS += -DDHD_USE_STATIC_CTRLBUF
 ifeq ($(CONFIG_BCMDHD_PREALLOC_PKTIDMAP),y)
   DHDCFLAGS += -DDHD_USE_STATIC_PKTIDMAP
 endif
@@ -180,6 +153,9 @@ ifeq ($(CONFIG_BCMDHD_PREALLOC_MEMDUMP),y)
 endif
 endif # BUS_IFACE_PCIE
 endif # CONFIG_BROADCOM_WIFI_RESERVED_MEM
+
+# DTIM listen interval in suspend mode(0 means follow AP's DTIM period)
+DHDCFLAGS += -DCUSTOM_SUSPEND_BCN_LI_DTIM=0
 
 # Ioctl timeout 5000ms
 DHDCFLAGS += -DIOCTL_RESP_TIMEOUT=5000
@@ -202,14 +178,6 @@ DHDCFLAGS += -DUSE_INITIAL_SHORT_DWELL_TIME
 # Japan ccode revision will be fixed by nvram's value
 DHDCFLAGS += -DKEEP_JP_REGREV
 
-# NAN feature
-ifeq ($(CONFIG_WL_NAN),y)
-DHDCFLAGS += -DWL_NAN
-endif
-
-# FCC power limit control on ch12/13.
-DHDCFLAGS += -DFCC_PWR_LIMIT_2G
-
 # WFA Certification feature
 DHDCFLAGS += -DUSE_WFA_CERT_CONF
 
@@ -217,33 +185,23 @@ DHDCFLAGS += -DUSE_WFA_CERT_CONF
 # Android Platform Definition
 ##############################
 
-###########
-# Lollipop
-###########
+#
+# $ Copyright Open Broadcom Corporation $
+#
+#
+# <<Broadcom-WL-IPTag/Open:>>
+#
+##########
+# KitKat
+##########
 # Definitions are filtered by Kernel version
 DHDCFLAGS += -DWL_ENABLE_P2P_IF
 DHDCFLAGS += -DWL_SUPPORT_BACKPORTED_KPATCHES
-# Default definitions for KitKat, Lollipop
+# Default definitions for KitKat
 DHDCFLAGS += -DWL_CFG80211_STA_EVENT
 DHDCFLAGS += -DWL_IFACE_COMB_NUM_CHANNELS
 # To support p2p private command on kernel 3.8 or above
 DHDCFLAGS += -DWL_NEWCFG_PRIVCMD_SUPPORT
-# Link Statistics feature
-DHDCFLAGS += -DLINKSTAT_SUPPORT
-
-# To support GSCAN
-DHDCFLAGS += -DGSCAN_SUPPORT
-
-# To support RTT
-DHDCFLAGS += -DRTT_SUPPORT
-
-# To support WL_VENDOR_EXT_SUPPORT
-DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
-
-# Extra file list for Lollipop
-DHD_ANDROID_OFILES := wl_cfgvendor.o dhd_rtt.o bcmxtlv.o bcm_app_utils.o
-
-
 
 
 
@@ -264,17 +222,13 @@ ifneq ($(CONFIG_BCM4359),)
   DHDCFLAGS += -DUSE_CID_CHECK
   DHDCFLAGS += -DENABLE_BCN_LI_BCN_WAKEUP
   DHDCFLAGS += -DDHD_DONOT_FORWARD_BCMEVENT_AS_NETWORK_PKT
-  DHDCFLAGS += -DCUSTOM_BCN_TIMEOUT=6
+  DHDCFLAGS += -DCUSTOM_BCN_TIMEOUT=4
   DHDCFLAGS += -DSOFTAP_UAPSD_OFF
 # tput enhancement for common
   DHDCFLAGS += -DUSE_WL_TXBF
   DHDCFLAGS += -DUSE_WL_FRAMEBURST
   DHDCFLAGS += -DDISABLE_FRAMEBURST_VSDB
   DHDCFLAGS += -DDISABLE_PM_BCNRX
-# IF race condition debug
-  DHDCFLAGS += -DDHD_IFDEBUG
-# Will be enabled after customer confirm.
-# DHDCFLAGS += -DCONVERGE_DTIM_INTERVAL
 
 # tput enhancement for PCIE
 ifeq ($(BUS_IFACE_PCIE),y)
@@ -285,15 +239,11 @@ ifeq ($(BUS_IFACE_PCIE),y)
   DHDCFLAGS += -DCUSTOM_TCPACK_SUPP_RATIO=15
   DHDCFLAGS += -DCUSTOM_TCPACK_DELAY_TIME=10
   DHDCFLAGS += -DDHDTCPACK_SUPPRESS
-  DHDCFLAGS += -DSET_RPS_CPUS
 endif
 
 ifeq ($(CONFIG_ARCH_MSM),y)
+  DHDCFLAGS += -DSET_RPS_CPUS
   DHDCFLAGS := $(filter-out -DDHDTCPACK_SUPPRESS,$(DHDCFLAGS))
-endif
-
-ifeq ($(CONFIG_MACH_UNIVERSAL7420),y)
-  DHDCFLAGS += -DUSE_EXYNOS_PCIE_RC_PMPATCH
 endif
 
 # New Features
@@ -304,7 +254,7 @@ endif
   DHDCFLAGS += -DWLTDLS
   DHDCFLAGS += -DWLFBT
   DHDCFLAGS += -DDHD_ENABLE_LPC
-  DHDCFLAGS += -DWLAIBSS -DWLAIBSS_PS
+  DHDCFLAGS += -DWLAIBSS
   DHDCFLAGS += -DWL_RELMCAST
   DHDCFLAGS += -DSUPPORT_LTECX
   DHDCFLAGS += -DSUPPORT_2G_VHT
@@ -314,13 +264,6 @@ endif
   DHDCFLAGS += -DWL_VIRTUAL_APSTA
  # Remove common feature for BCM4359
   DHDCFLAGS :=$(filter-out -DDISABLE_11H_SOFTAP,$(DHDCFLAGS))
-
- # RSDB mode from file config
-  DHDCFLAGS += -DRSDB_MODE_FROM_FILE
- # LOGTRACE_EVENT
-  DHDCFLAGS += -DSHOW_LOGTRACE
-  DHDCFLAGS += -DLOGTRACE_FROM_FILE
-
 ifeq ($(CONFIG_BCM4359),y)
   DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
   DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
@@ -385,7 +328,7 @@ endif
   DHDCFLAGS += -DWLTDLS
   DHDCFLAGS += -DWLFBT
   DHDCFLAGS += -DDHD_ENABLE_LPC
-  DHDCFLAGS += -DWLAIBSS -DWLAIBSS_PS
+  DHDCFLAGS += -DWLAIBSS
   DHDCFLAGS += -DWL_RELMCAST
   DHDCFLAGS += -DSUPPORT_LTECX
   DHDCFLAGS += -DSUPPORT_2G_VHT
@@ -793,18 +736,11 @@ ifeq ($(BUS_IFACE_PCIE),y)
 DHDOFILES += dhd_pcie.o dhd_pcie_linux.o pcie_core.o dhd_flowring.o dhd_msgbuf.o
 endif
 
-DHDOFILES += $(DHD_ANDROID_OFILES)
-
 # For SPI projects
 ifeq ($(CONFIG_SPI_SC8810),y)
 DHDOFILES += bcmsdspi_linux.o bcmspibrcm.o
 DHDOFILES :=$(filter-out bcmsdh_sdmmc.o,$(DHDOFILES))
 DHDOFILES :=$(filter-out bcmsdh_sdmmc_linux.o,$(DHDOFILES))
-endif
-
-# NAN feature
-ifeq ($(CONFIG_WL_NAN),y)
-DHDOFILES += wl_cfgnan.o bcmxtlv.o
 endif
 
 dhd-y := $(DHDOFILES)

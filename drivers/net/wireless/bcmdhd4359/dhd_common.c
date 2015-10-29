@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_common.c 565320 2015-06-20 10:06:32Z $
+ * $Id: dhd_common.c 551802 2015-04-24 06:34:11Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -85,7 +85,7 @@
 #endif /* DHD_PSTA */
 
 
-int dhd_msg_level = DHD_ERROR_VAL | DHD_MSGTRACE_VAL | DHD_FWLOG_VAL;
+int dhd_msg_level = DHD_ERROR_VAL | DHD_MSGTRACE_VAL;
 
 
 
@@ -523,17 +523,6 @@ dhd_iovar_parse_bssidx(dhd_pub_t *dhd_pub, char *params, int *idx, char **val)
 	return BCME_OK;
 }
 
-#if defined(DHD_DEBUG) && defined(BCMDHDUSB)
-/* USB Device console input function */
-int dhd_bus_console_in(dhd_pub_t *dhd, uchar *msg, uint msglen)
-{
-	DHD_TRACE(("%s \n", __FUNCTION__));
-
-	return dhd_iovar(dhd, 0, "cons", msg, msglen, 1);
-
-}
-#endif /* DHD_DEBUG && BCMDHDUSB  */
-
 static int
 dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const char *name,
             void *params, int plen, void *arg, int len, int val_size)
@@ -592,11 +581,6 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 			bcmerror = BCME_NOTUP;
 			break;
 		}
-
-		if (CUSTOM_DHD_WATCHDOG_MS == 0 && int_val == 0) {
-			dhd_watchdog_ms = (uint)int_val;
-		}
-
 		dhd_os_wd_timer(dhd_pub, (uint)int_val);
 		break;
 
@@ -1414,9 +1398,6 @@ dhd_eventmsg_print(dhd_pub_t *dhd_pub, void *event_data, void *raw_event_ptr,
 
 	BCM_REFERENCE(arg);
 
-	if (!DHD_FWLOG_ON())
-		return;
-
 	buf = (uchar *) event_data;
 	memcpy(&hdr, buf, MSGTRACE_HDRLEN);
 
@@ -1434,7 +1415,7 @@ dhd_eventmsg_print(dhd_pub_t *dhd_pub, void *event_data, void *raw_event_ptr,
 		buf[MSGTRACE_HDRLEN + ntoh16(hdr.len)] = '\0';
 
 		if (ntoh32(hdr.discarded_bytes) || ntoh32(hdr.discarded_printf)) {
-			DHD_FWLOG(("WLC_E_TRACE: [Discarded traces in dongle -->"
+			DHD_EVENT(("WLC_E_TRACE: [Discarded traces in dongle -->"
 				"discarded_bytes %d discarded_printf %d]\n",
 				ntoh32(hdr.discarded_bytes),
 				ntoh32(hdr.discarded_printf)));
@@ -1442,7 +1423,7 @@ dhd_eventmsg_print(dhd_pub_t *dhd_pub, void *event_data, void *raw_event_ptr,
 
 		nblost = ntoh32(hdr.seqnum) - seqnum_prev - 1;
 		if (nblost > 0) {
-			DHD_FWLOG(("WLC_E_TRACE:"
+			DHD_EVENT(("WLC_E_TRACE:"
 				"[Event lost (msg) --> seqnum %d nblost %d\n",
 				ntoh32(hdr.seqnum), nblost));
 		}
@@ -1455,11 +1436,11 @@ dhd_eventmsg_print(dhd_pub_t *dhd_pub, void *event_data, void *raw_event_ptr,
 		p = (char *)&buf[MSGTRACE_HDRLEN];
 		while (*p != '\0' && (s = strstr(p, "\n")) != NULL) {
 			*s = '\0';
-			DHD_FWLOG(("[FWLOG] %s\n", p));
+			DHD_EVENT(("%s\n", p));
 			p = s+1;
 		}
 		if (*p)
-			DHD_FWLOG(("[FWLOG] %s", p));
+			DHD_EVENT(("%s", p));
 
 		/* Reset datalen to avoid display below */
 		datalen = 0;
@@ -1877,8 +1858,6 @@ wl_show_host_event(dhd_pub_t *dhd_pub, wl_event_msg_t *event, void *event_data,
 	case WLC_E_PFN_NET_LOST:
 	case WLC_E_PFN_SCAN_NONE:
 	case WLC_E_PFN_SCAN_ALLGONE:
-	case WLC_E_PFN_GSCAN_FULL_RESULT:
-	case WLC_E_PFN_SWC:
 		DHD_EVENT(("PNOEVENT: %s\n", event_name));
 		break;
 
@@ -1928,10 +1907,8 @@ wl_show_host_event(dhd_pub_t *dhd_pub, wl_event_msg_t *event, void *event_data,
 		break;
 	case WLC_E_ESCAN_RESULT:
 	{
-#ifndef DHD_IFDEBUG
 		DHD_EVENT(("MACEVENT: %s %d, MAC %s, status %d \n",
 		       event_name, event_type, eabuf, (int)status));
-#endif
 	}
 		break;
 	default:
@@ -2169,32 +2146,24 @@ wl_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata,
 	case WLC_E_DEAUTH_IND:
 	case WLC_E_DISASSOC:
 	case WLC_E_DISASSOC_IND:
+		if (type != WLC_E_LINK) {
+			dhd_del_sta(dhd_pub, dhd_ifname2idx(dhd_pub->info,
+				event->ifname), &event->addr.octet);
+		}
 		DHD_EVENT(("%s: Link event %d, flags %x, status %x\n",
 		           __FUNCTION__, type, flags, status));
 #ifdef PCIE_FULL_DONGLE
 		if (type != WLC_E_LINK) {
 			uint8 ifindex = (uint8)dhd_ifname2idx(dhd_pub->info, event->ifname);
 			uint8 role = dhd_flow_rings_ifindex2role(dhd_pub, ifindex);
-			uint8 del_sta = TRUE;
-#ifdef WL_CFG80211
-			if (role == WLC_E_IF_ROLE_STA && !wl_cfg80211_is_roam_offload() &&
-				!wl_cfg80211_is_event_from_connected_bssid(event, *ifidx)) {
-				del_sta = FALSE;
-			}
-#endif /* WL_CFG80211 */
-
-			if (del_sta) {
-				dhd_del_sta(dhd_pub, dhd_ifname2idx(dhd_pub->info,
-					event->ifname), &event->addr.octet);
-				if (role == WLC_E_IF_ROLE_STA) {
-					dhd_flow_rings_delete(dhd_pub, ifindex);
-				} else {
-					dhd_flow_rings_delete_for_peer(dhd_pub, ifindex,
-						&event->addr.octet[0]);
-				}
+			if (role == WLC_E_IF_ROLE_STA) {
+				dhd_flow_rings_delete(dhd_pub, ifindex);
+			} else {
+				dhd_flow_rings_delete_for_peer(dhd_pub, ifindex,
+					&event->addr.octet[0]);
 			}
 		}
-#endif /* PCIE_FULL_DONGLE */
+#endif
 		/* fall through */
 	default:
 		*ifidx = dhd_ifname2idx(dhd_pub->info, event->ifname);
@@ -2209,10 +2178,8 @@ wl_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata,
 	}
 
 #ifdef SHOW_EVENTS
-	if (DHD_FWLOG_ON() || DHD_EVENT_ON()) {
-		wl_show_host_event(dhd_pub, event,
-			(void *)event_data, raw_event, dhd_pub->enable_log);
-	}
+	wl_show_host_event(dhd_pub, event,
+		(void *)event_data, raw_event, dhd_pub->enable_log);
 #endif /* SHOW_EVENTS */
 
 	return (BCME_OK);
@@ -3026,17 +2993,6 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd)
 	/* attemp to use platform defined dtim skip interval */
 	bcn_li_dtim = dhd->suspend_bcn_li_dtim;
 
-#ifdef CONVERGE_DTIM_INTERVAL
-	bcn_li_dtim = (int) (MAX_DTIM_ALLOWED_INTERVAL / (ap_beacon * dtim_period));
-	if (bcn_li_dtim == 0) {
-		bcn_li_dtim = 1;
-	}
-
-	DHD_ERROR(("%s bcn_li_dtim=%d (beacon=%d DTIM=%d)\n",
-		__FUNCTION__, bcn_li_dtim, ap_beacon, dtim_period));
-	goto exit;
-#endif /* CONVERGE_DTIM_INTERVAL */
-
 	/* check if sta listen interval fits into AP dtim */
 	if (dtim_period > CUSTOM_LISTEN_INTERVAL) {
 		/* AP DTIM to big for our Listen Interval : no dtim skiping */
@@ -3460,38 +3416,4 @@ void dhd_free_download_buffer(dhd_pub_t	*dhd, void *buffer, int length)
 	return;
 #endif
 	MFREE(dhd->osh, buffer, length);
-}
-/* Parse EAPOL 4 way handshake messages */
-void
-dhd_dump_eapol_4way_message(char *dump_data, bool direction)
-{
-	unsigned char type;
-	int pair, ack, mic, kerr, req, sec, install;
-	unsigned short us_tmp;
-	type = dump_data[18];
-	if (type == 2 || type == 254) {
-		us_tmp = (dump_data[19] << 8) | dump_data[20];
-		pair =  0 != (us_tmp & 0x08);
-		ack = 0  != (us_tmp & 0x80);
-		mic = 0  != (us_tmp & 0x100);
-		kerr =  0 != (us_tmp & 0x400);
-		req = 0  != (us_tmp & 0x800);
-		sec = 0  != (us_tmp & 0x200);
-		install  = 0 != (us_tmp & 0x40);
-		if (!sec && !mic && ack && !install && pair && !kerr && !req) {
-			DHD_ERROR(("ETHER_TYPE_802_1X [%s] : M1 of 4way\n", direction ? "TX" : "RX"));
-		} else if (pair && !install && !ack && mic && !sec && !kerr && !req) {
-			DHD_ERROR(("ETHER_TYPE_802_1X [%s] : M2 of 4way\n", direction ? "TX" : "RX"));
-		} else if (pair && ack && mic && sec && !kerr && !req) {
-			DHD_ERROR(("ETHER_TYPE_802_1X [%s] : M3 of 4way\n", direction ? "TX" : "RX"));
-		} else if (pair && !install && !ack && mic && sec && !req && !kerr) {
-			DHD_ERROR(("ETHER_TYPE_802_1X [%s] : M4 of 4way\n", direction ? "TX" : "RX"));
-		} else {
-			DHD_ERROR(("ETHER_TYPE_802_1X [%s]: ver %d, type %d, replay %d\n",
-				direction ? "TX" : "RX", dump_data[14], dump_data[15], dump_data[30]));
-		}
-	} else {
-		DHD_ERROR(("ETHER_TYPE_802_1X [%s]: ver %d, type %d, replay %d\n",
-				direction ? "TX" : "RX", dump_data[14], dump_data[15], dump_data[30]));
-	}
 }

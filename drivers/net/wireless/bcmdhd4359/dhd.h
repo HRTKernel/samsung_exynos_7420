@@ -27,7 +27,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd.h 566691 2015-06-25 14:52:09Z $
+ * $Id: dhd.h 553670 2015-04-30 14:27:12Z $
  */
 
 /****************
@@ -51,7 +51,7 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
 #include <linux/wakelock.h>
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
-#include <dhd_buzzz.h>
+
 /* The kernel threading is sdio-specific */
 struct task_struct;
 struct sched_param;
@@ -72,16 +72,6 @@ int get_scheduler_policy(struct task_struct *p);
 #if defined(CUSTOMER_HW4)
 #define MAX_RESCHED_CNT 600
 #endif 
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0) || \
-	defined(CONFIG_BCMDHD_VENDOR_EXT))
-#define WL_VENDOR_EXT_SUPPORT
-#endif
-#if defined(CONFIG_ANDROID) && defined(WL_VENDOR_EXT_SUPPORT)
-#if !defined(GSCAN_SUPPORT)
-#define GSCAN_SUPPORT
-#endif
-#endif /* CONFIG_ANDROID && WL_VENDOR_EXT_SUPPORT */
 
 #if defined(KEEP_ALIVE)
 /* Default KEEP_ALIVE Period is 55 sec to prevent AP from sending Keep Alive probe frame */
@@ -154,7 +144,9 @@ enum dhd_op_flags {
 #ifndef POWERUP_WAIT_MS
 #define POWERUP_WAIT_MS		2000 /* ms: time out in waiting wifi to come up */
 #endif
-#define MAX_NVRAMBUF_SIZE	(16 * 1024) /* max nvram buf size */
+
+#define MAX_NVRAMBUF_SIZE	(6 * 1024) /* max nvram buf size */
+
 #ifdef DHD_DEBUG
 #define DHD_JOIN_MAX_TIME_DEFAULT 10000 /* ms: Max time out for joining AP */
 #define DHD_SCAN_DEF_TIMEOUT 10000 /* ms: Max time out for scan in progress */
@@ -204,15 +196,6 @@ enum dhd_dongledump_mode {
 	DUMP_MEMFILE,
 	DUMP_MEMFILE_BUGON,
 	DUMP_MEMFILE_MAX
-};
-
-enum dhd_dongledump_type {
-	DUMP_TYPE_RESUMED_ON_TIMEOUT = 1,
-	DUMP_TYPE_D3_ACK_TIMEOUT,
-	DUMP_TYPE_DONGLE_TRAP,
-	DUMP_TYPE_MEMORY_CORRUPTION,
-	DUMP_TYPE_PKTID_AUDIT_FAILURE,
-	DUMP_TYPE_SCAN_TIMEOUT
 };
 
 /* Packet alignment for most efficient SDIO (can change based on platform) */
@@ -398,10 +381,6 @@ typedef struct dhd_pub {
 	int pktfilter_count;
 
 	wl_country_t dhd_cspec;		/* Current Locale info */
-#ifdef CUSTOM_COUNTRY_CODE
-	u32 dhd_cflags;
-#endif /* CUSTOM_COUNTRY_CODE */
-	bool force_country_change;
 	char eventmask[WL_EVENTING_MASK_LEN];
 	int	op_mode;				/* STA, HostAPD, WFD, SoftAP */
 
@@ -446,17 +425,9 @@ typedef struct dhd_pub {
 	/* platform specific function for wlfc_enable and wlfc_deinit */
 	void (*plat_init)(void *dhd);
 	void (*plat_deinit)(void *dhd);
-#ifdef DHD_WLFC_THREAD
-	bool                wlfc_thread_go;
-	struct task_struct* wlfc_thread;
-	wait_queue_head_t   wlfc_wqhead;
-#endif /* DHD_WLFC_THREAD */
 #endif /* PROP_TXSTATUS */
 #ifdef PNO_SUPPORT
 	void *pno_state;
-#endif
-#ifdef RTT_SUPPORT
-	void *rtt_state;
 #endif
 #ifdef ROAM_AP_ENV_DETECTION
 	bool	roam_env_detection;
@@ -518,7 +489,6 @@ typedef struct dhd_pub {
 	void	*flow_ring_table;   /* flow ring table, include prot and bus info */
 	void	*if_flow_lkup;      /* per interface flowid lkup hash table */
 	void    *flowid_lock;       /* per os lock for flowid info protection */
-	void    *flowring_list_lock;       /* per os lock for flowring list protection */
 	uint32  num_flow_rings;
 	cumm_ctr_t cumm_ctr;        /* cumm queue length placeholder  */
 	uint32 d2h_sync_mode;       /* D2H DMA completion sync mode */
@@ -533,7 +503,6 @@ typedef struct dhd_pub {
 #endif /* DHD_L2_FILTER */
 	uint8 *soc_ram;
 	uint32 soc_ram_length;
-	uint32 memdump_type;
 #ifdef DHD_FW_COREDUMP
 	uint32 memdump_enabled;
 #endif /* DHD_FW_COREDUMP */
@@ -553,13 +522,6 @@ typedef struct dhd_pub {
 	char vars_ccode[WLC_CNTRY_BUF_SZ];
 	uint vars_regrev;
 #endif /* KEEP_JP_REGREV */
-#ifdef WLTDLS
-	uint32 tdls_mode;
-#endif
-#ifdef DHD_LOSSLESS_ROAMING
-	uint8 dequeue_prec_map;
-#endif
-	struct mutex wl_up_lock;
 } dhd_pub_t;
 
 #if defined(PCIE_FULL_DONGLE)
@@ -692,10 +654,6 @@ extern int dhd_os_wake_lock_restore(dhd_pub_t *pub);
 extern void dhd_os_oob_irq_wake_lock_timeout(dhd_pub_t *pub, int val);
 extern void dhd_os_oob_irq_wake_unlock(dhd_pub_t *pub);
 #endif /* BCMPCIE_OOB_HOST_WAKE */
-#ifdef DHD_USE_SCAN_WAKELOCK
-extern void dhd_os_scan_wake_lock_timeout(dhd_pub_t *pub, int val);
-extern void dhd_os_scan_wake_unlock(dhd_pub_t *pub);
-#endif /* BCMPCIE_SCAN_WAKELOCK */
 
 inline static void MUTEX_LOCK_SOFTAP_SET_INIT(dhd_pub_t * dhdp)
 {
@@ -783,37 +741,13 @@ inline static void MUTEX_UNLOCK_SOFTAP_SET(dhd_pub_t * dhdp)
 
 #define DHD_OS_WD_WAKE_LOCK(pub)		dhd_os_wd_wake_lock(pub)
 #define DHD_OS_WD_WAKE_UNLOCK(pub)		dhd_os_wd_wake_unlock(pub)
-
 #ifdef BCMPCIE_OOB_HOST_WAKE
 #define OOB_WAKE_LOCK_TIMEOUT 500
 #define DHD_OS_OOB_IRQ_WAKE_LOCK_TIMEOUT(pub, val)	dhd_os_oob_irq_wake_lock_timeout(pub, val)
 #define DHD_OS_OOB_IRQ_WAKE_UNLOCK(pub)			dhd_os_oob_irq_wake_unlock(pub)
 #endif /* BCMPCIE_OOB_HOST_WAKE */
-#ifdef DHD_USE_SCAN_WAKELOCK
-#ifdef DHD_DEBUG_SCAN_WAKELOCK
-#define DHD_OS_SCAN_WAKE_LOCK_TIMEOUT(pub, val) \
-	do { \
-		printf("call wake_lock_scan: %s %d\n", \
-			__FUNCTION__, __LINE__); \
-		dhd_os_scan_wake_lock_timeout(pub, val); \
-	} while (0)
-#define DHD_OS_SCAN_WAKE_UNLOCK(pub) \
-	do { \
-		printf("call wake_unlock_scan: %s %d\n", \
-			__FUNCTION__, __LINE__); \
-		dhd_os_scan_wake_unlock(pub); \
-	} while (0)
-#else
-#define DHD_OS_SCAN_WAKE_LOCK_TIMEOUT(pub, val)		dhd_os_scan_wake_lock_timeout(pub, val)
-#define DHD_OS_SCAN_WAKE_UNLOCK(pub)			dhd_os_scan_wake_unlock(pub)
-#endif /* DHD_DEBUG_SCAN_WAKELOCK */
-#else
-#define DHD_OS_SCAN_WAKE_LOCK_TIMEOUT(pub, val)
-#define DHD_OS_SCAN_WAKE_UNLOCK(pub)
-#endif /* DHD_USE_SCAN_WAKELOCK */
 #define DHD_PACKET_TIMEOUT_MS	500
 #define DHD_EVENT_TIMEOUT_MS	1500
-#define SCAN_WAKE_LOCK_TIMEOUT	10000
 
 
 /* interface operations (register, remove) should be atomic, use this lock to prevent race
@@ -912,23 +846,15 @@ extern void dhd_dpc_enable(dhd_pub_t *dhdp);
 #define MAX_FEATURE_SET_CONCURRRENT_GROUPS  3
 
 extern int dhd_dev_get_feature_set(struct net_device *dev);
-extern int *dhd_dev_get_feature_set_matrix(struct net_device *dev,      int *num);
-#ifdef CUSTOM_FORCE_NODFS_FLAG
-extern int dhd_dev_set_nodfs(struct net_device *dev, uint nodfs)
-#endif /* CUSTOM_FORCE_NODFS_FLAG */
-/* OS innependent layer functions */
+extern int dhd_dev_get_feature_set_matrix(struct net_device *dev, int *matrix);
+
+/* OS independent layer functions */
 extern int dhd_os_proto_block(dhd_pub_t * pub);
 extern int dhd_os_proto_unblock(dhd_pub_t * pub);
 extern int dhd_os_ioctl_resp_wait(dhd_pub_t * pub, uint * condition);
 extern int dhd_os_ioctl_resp_wake(dhd_pub_t * pub);
 extern unsigned int dhd_os_get_ioctl_resp_timeout(void);
 extern void dhd_os_set_ioctl_resp_timeout(unsigned int timeout_msec);
-extern void dhd_os_ioctl_resp_lock(dhd_pub_t * pub);
-extern void dhd_os_ioctl_resp_unlock(dhd_pub_t * pub);
-
-#define DHD_OS_IOCTL_RESP_LOCK(x)
-#define DHD_OS_IOCTL_RESP_UNLOCK(x)
-
 
 extern int dhd_os_get_image_block(char * buf, int len, void * image);
 extern void * dhd_os_open_image(char * filename);
@@ -949,12 +875,7 @@ extern void dhd_os_tcpackunlock(dhd_pub_t *pub, unsigned long flags);
 extern int dhd_customer_oob_irq_map(void *adapter, unsigned long *irq_flags_ptr);
 extern int dhd_customer_gpio_wlan_ctrl(void *adapter, int onoff);
 extern int dhd_custom_get_mac_address(void *adapter, unsigned char *buf);
-#ifdef CUSTOM_COUNTRY_CODE
-extern void get_customized_country_code(void *adapter, char *count     ry_iso_code,
-wl_country_t *cspec, u32 flags);
-#else
 extern void get_customized_country_code(void *adapter, char *country_iso_code, wl_country_t *cspec);
-#endif /* CUSTOM_COUNTRY_CODE */
 extern void dhd_os_sdunlock_sndup_rxq(dhd_pub_t * pub);
 extern void dhd_os_sdlock_eventq(dhd_pub_t * pub);
 extern void dhd_os_sdunlock_eventq(dhd_pub_t * pub);
@@ -1322,13 +1243,12 @@ void dhd_arp_offload_add_ip(dhd_pub_t *dhd, uint32 ipaddr, int idx);
 #endif /* ARP_OFFLOAD_SUPPORT */
 #ifdef WLTDLS
 int dhd_tdls_enable(struct net_device *dev, bool tdls_on, bool auto_on, struct ether_addr *mac);
-int dhd_tdls_set_mode(dhd_pub_t *dhd, bool wfd_mode);
 #ifdef PCIE_FULL_DONGLE
 void dhd_tdls_update_peer_info(struct net_device *dev, bool connect_disconnect, uint8 *addr);
 #endif /* PCIE_FULL_DONGLE */
 #endif /* WLTDLS */
 /* Neighbor Discovery Offload Support */
-extern int dhd_ndo_enable(dhd_pub_t * dhd, int ndo_enable);
+int dhd_ndo_enable(dhd_pub_t * dhd, int ndo_enable);
 int dhd_ndo_add_ip(dhd_pub_t *dhd, char* ipaddr, int idx);
 int dhd_ndo_remove_ip(dhd_pub_t *dhd, int idx);
 /* ioctl processing for nl80211 */
@@ -1383,7 +1303,7 @@ enum {
 #endif /* PROP_TXSTATUS */
 	PARAM_LAST_VALUE
 };
-extern int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val);
+extern int sec_get_param(dhd_pub_t *dhd, int mode, uint* read_val);
 #endif /* CUSTOMER_HW4 && USE_WFA_CERT_CONF */
 
 #define dhd_add_flowid(pub, ifidx, ac_prio, ea, flowid)  do {} while (0)
@@ -1413,10 +1333,6 @@ extern void dhd_os_general_spin_unlock(dhd_pub_t *pub, unsigned long flags);
 /* Enable DHD common flowring info spin lock/unlock */
 #define DHD_FLOWID_LOCK(lock, flags)       (flags) = dhd_os_spin_lock(lock)
 #define DHD_FLOWID_UNLOCK(lock, flags)     dhd_os_spin_unlock((lock), (flags))
-
-/* Enable DHD common flowring list spin lock/unlock */
-#define DHD_FLOWRING_LIST_LOCK(lock, flags)       (flags) = dhd_os_spin_lock(lock)
-#define DHD_FLOWRING_LIST_UNLOCK(lock, flags)     dhd_os_spin_unlock((lock), (flags))
 
 extern void dhd_dump_to_kernelog(dhd_pub_t *dhdp);
 
@@ -1476,11 +1392,10 @@ void dhd_free_download_buffer(dhd_pub_t	*dhd, void *buffer, int length);
 #define dhd_is_device_removed(x) FALSE
 #define dhd_os_ind_firmware_stall(x)
 
-#if defined(DHD_FW_COREDUMP)
-extern void dhd_get_memdump_info(dhd_pub_t *dhd);
-#endif 
-
 #ifdef CUSTOMER_HW4
+#ifdef DHD_FW_COREDUMP
+extern void dhd_get_memdump_info(dhd_pub_t *dhd);
+#endif /* DHD_FW_COREDUMP */
 #if defined(SUPPORT_MULTIPLE_MODULE_CIS) && defined(USE_CID_CHECK)
 extern int dhd_check_module_b85a(dhd_pub_t *dhd);
 #endif /* defined(SUPPORT_MULTIPLE_MODULE_CIS) && defined(USE_CID_CHECK) */

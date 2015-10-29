@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pcie.h 554122 2015-05-04 13:06:16Z $
+ * $Id: dhd_pcie.h 550392 2015-04-20 14:07:35Z $
  */
 
 
@@ -60,7 +60,7 @@
  * Router with 4366 can have 128 stations and 16 BSS,
  * hence (128 stations x 4 access categories for ucast) + 16 bc/mc flowrings
  */
-#define MAX_DHD_TX_FLOWS	320
+#define MAX_DHD_TX_FLOWS	256
 
 /* user defined data structures */
 /* Device console log buffer state */

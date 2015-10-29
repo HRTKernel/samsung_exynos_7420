@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_sdio.c 558958 2015-05-26 06:30:29Z $
+ * $Id: dhd_sdio.c 542048 2015-03-18 15:37:26Z $
  */
 
 #include <typedefs.h>
@@ -400,10 +400,6 @@ typedef struct dhd_bus {
 #define CLK_AVAIL	3
 
 #define DHD_NOPMU(dhd)	(FALSE)
-
-#if defined(BCMSDIOH_STD)
-#define BLK_64_MAXTXGLOM 20
-#endif /* BCMSDIOH_STD */
 
 #ifdef DHD_DEBUG
 static int qcount[NUMPRIO];
@@ -2248,9 +2244,6 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 
 	osh = dhd->osh;
 	tx_prec_map = ~bus->flowcontrol;
-#ifdef DHD_LOSSLESS_ROAMING
-	tx_prec_map &= dhd->dequeue_prec_map;
-#endif
 	for (cnt = 0; (cnt < maxframes) && DATAOK(bus);) {
 		int i;
 		int num_pkt = 1;
@@ -2259,18 +2252,12 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 
 		dhd_os_sdlock_txq(bus->dhd);
 		if (bus->txglom_enable) {
-			uint32 glomlimit = (uint32)bus->txglomsize;
-#if defined(BCMSDIOH_STD)
-			if (bus->blocksize == 64) {
-				glomlimit = MIN((uint32)bus->txglomsize, BLK_64_MAXTXGLOM);
-			}
-#endif /* BCMSDIOH_STD */
-			num_pkt = MIN((uint32)DATABUFCNT(bus), glomlimit);
+			num_pkt = MIN((uint32)DATABUFCNT(bus), (uint32)bus->txglomsize);
 			num_pkt = MIN(num_pkt, ARRAYSIZE(pkts));
 		}
 		num_pkt = MIN(num_pkt, pktq_mlen(&bus->txq, tx_prec_map));
 		for (i = 0; i < num_pkt; i++) {
-			pkts[i] = pktq_mdeq(&bus->txq, tx_prec_map, &prec_out);
+			pkts[i] = pktq_mdeq(&bus->txq, ~bus->flowcontrol, &prec_out);
 			if (!pkts[i]) {
 				DHD_ERROR(("%s: pktq_mlen non-zero when no pkt\n",
 					__FUNCTION__));

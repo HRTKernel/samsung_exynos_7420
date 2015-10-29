@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pcie.c 566928 2015-06-26 06:39:07Z $
+ * $Id: dhd_pcie.c 551768 2015-04-24 05:25:53Z $
  */
 
 
@@ -67,7 +67,6 @@
 #endif /* PCIE_OOB */
 
 #define MEMBLOCK	2048		/* Block size used for downloading of dongle image */
-#define MAX_WKLK_IDLE_CHECK	3	/* times wake_lock checked before deciding not to suspend */
 
 #define ARMCR4REG_BANKIDX	(0x40/sizeof(uint32))
 #define ARMCR4REG_BANKPDA	(0x4C/sizeof(uint32))
@@ -127,10 +126,6 @@ extern void dhd_dpc_kill(dhd_pub_t *dhdp);
 static int dhdpcie_download_code_array(dhd_bus_t *bus);
 #endif /* BCMEMBEDIMAGE */
 
-
-#if defined(CUSTOMER_HW4) && defined(CONFIG_MACH_UNIVERSAL7420)
-extern void exynos_pcie_register_dump(int ch_num);
-#endif /* CUSTOMER_HW4 && CONFIG_MACH_UNIVERSAL7420 */
 
 #define     PCI_VENDOR_ID_BROADCOM          0x14e4
 
@@ -1763,7 +1758,6 @@ printbuf:
 #if defined(DHD_FW_COREDUMP)
 		/* save core dump or write to a file */
 		if (bus->dhd->memdump_enabled) {
-			bus->dhd->memdump_type = DUMP_TYPE_DONGLE_TRAP;
 			dhdpcie_mem_dump(bus);
 		}
 #endif /* DHD_FW_COREDUMP */
@@ -1829,10 +1823,6 @@ dhdpcie_mem_dump(dhd_bus_t *bus)
 	int read_size = 0; /* Read size of each iteration */
 	uint8 *buf = NULL, *databuf = NULL;
 
-#if defined(CUSTOMER_HW4) && defined(CONFIG_MACH_UNIVERSAL7420)
-	exynos_pcie_register_dump(1);
-#endif /* CUSTOMER_HW4 && CONFIG_MACH_UNIVERSAL7420 */
-
 	/* Get full mem size */
 	size = bus->ramsize;
 #if defined(CONFIG_DHD_USE_STATIC_BUF) && defined(DHD_USE_STATIC_MEMDUMP)
@@ -1880,12 +1870,6 @@ int
 dhd_bus_mem_dump(dhd_pub_t *dhdp)
 {
 	dhd_bus_t *bus = dhdp->bus;
-
-	if (bus->suspended) {
-		DHD_ERROR(("%s: Bus is suspend so skip\n", __FUNCTION__));
-		return 0;
-	}
-
 	return dhdpcie_mem_dump(bus);
 }
 #endif /* DHD_FW_COREDUMP */
@@ -1974,9 +1958,7 @@ dhd_bus_schedule_queue(struct dhd_bus  *bus, uint16 flow_id, bool txs)
 {
 	flow_ring_node_t *flow_ring_node;
 	int ret = BCME_OK;
-#ifdef DHD_LOSSLESS_ROAMING
-	dhd_pub_t *dhdp = bus->dhd;
-#endif
+
 	DHD_INFO(("%s: flow_id is %d\n", __FUNCTION__, flow_id));
 
 	/* ASSERT on flow_id */
@@ -1988,22 +1970,10 @@ dhd_bus_schedule_queue(struct dhd_bus  *bus, uint16 flow_id, bool txs)
 
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flow_id);
 
-#ifdef DHD_LOSSLESS_ROAMING
-	if ((dhdp->dequeue_prec_map & (1 << flow_ring_node->flow_info.tid)) == 0) {
-		DHD_INFO(("%s: tid %d is not in precedence map. block scheduling\n",
-			__FUNCTION__, flow_ring_node->flow_info.tid));
-		return BCME_OK;
-	}
-#endif /* DHD_LOSSLESS_ROAMING */
-
 	{
 		unsigned long flags;
 		void *txp = NULL;
 		flow_queue_t *queue;
-#ifdef DHD_LOSSLESS_ROAMING
-		struct ether_header *eh;
-		uint8 *pktdata;
-#endif /* DHD_LOSSLESS_ROAMING */
 
 		queue = &flow_ring_node->queue; /* queue associated with flow ring */
 
@@ -2034,18 +2004,6 @@ dhd_bus_schedule_queue(struct dhd_bus  *bus, uint16 flow_id, bool txs)
 				}
 			}
 #endif /* DHDTCPACK_SUPPRESS */
-#ifdef DHD_LOSSLESS_ROAMING
-			pktdata = (uint8 *)PKTDATA(OSH_NULL, txp);
-			eh = (struct ether_header *) pktdata;
-			if (eh->ether_type == hton16(ETHER_TYPE_802_1X)) {
-				uint8 prio = (uint8)PKTPRIO(txp);
-
-				/* Restore to original priority for 802.1X packet */
-				if (prio == PRIO_8021D_NC) {
-					PKTSETPRIO(txp, PRIO_8021D_BE);
-				}
-			}
-#endif /* DHD_LOSSLESS_ROAMING */
 
 			/* Attempt to transfer packet over flow ring */
 			ret = dhd_prot_txdata(bus->dhd, txp, flow_ring_node->flow_info.ifindex);
@@ -2844,14 +2802,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 		if (flag == TRUE) { /* Turn off WLAN */
 			/* Removing Power */
 			DHD_ERROR(("%s: == Power OFF ==\n", __FUNCTION__));
-			/*
-			 * Hold Mutex to avaoid race condition between watchdog thread
-			 * and dhd_bus_devreset function
-			 */
-			mutex_lock(&dhdp->wl_up_lock);
 			bus->dhd->up = FALSE;
-			mutex_unlock(&dhdp->wl_up_lock);
-
 			if (bus->dhd->busstate != DHD_BUS_DOWN) {
 				if (bus->intr) {
 					dhdpcie_bus_intr_disable(bus);
@@ -3571,9 +3522,6 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 	}
 
 	if (state) {
-		int idle_retry = 0;
-		int active;
-
 		/* Suspend */
 		DHD_ERROR(("%s: Entering suspend state\n", __FUNCTION__));
 		bus->wait_for_d3_ack = 0;
@@ -3589,40 +3537,17 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 		}
 		DHD_GENERAL_UNLOCK(bus->dhd, flags);
 		DHD_OS_WAKE_LOCK_WAIVE(bus->dhd);
-		dhd_os_set_ioctl_resp_timeout(D3_ACK_RESP_TIMEOUT);
+		dhd_os_set_ioctl_resp_timeout(DEFAULT_IOCTL_RESP_TIMEOUT);
 		dhdpcie_send_mb_data(bus, H2D_HOST_D3_INFORM);
 		timeleft = dhd_os_d3ack_wait(bus->dhd, &bus->wait_for_d3_ack);
 		dhd_os_set_ioctl_resp_timeout(IOCTL_RESP_TIMEOUT);
 		DHD_OS_WAKE_LOCK_RESTORE(bus->dhd);
-
-		/* To allow threads that got pre-empted to complete.
-		 */
-		while ((active = dhd_os_check_wakelock_all(bus->dhd)) &&
-			(idle_retry < MAX_WKLK_IDLE_CHECK)) {
-			msleep(1);
-			idle_retry++;
-		}
-
 		if (bus->wait_for_d3_ack) {
 			DHD_ERROR(("%s: Got D3 Ack \n", __FUNCTION__));
+
 			/* Got D3 Ack. Suspend the bus */
-			if (active) {
-				DHD_ERROR(("%s():Suspend failed because of wakelock restoring Dongle to D0\n",
-					__FUNCTION__));
-
-				/*
-				 * Dongle still thinks that it has to be in D3 state until gets a D0 Inform,
-				 * but we are backing off from suspend. Ensure that Dongle is brought back to D0.
-				 *
-				 * Bringing back Dongle from D3 Ack state to D0 state is a 2 step process.
-				 * Dongle would want to know that D0 Inform would be sent as a MB interrupt
-				 * to bring it out of D3 Ack state to D0 state. So we have to send both
-				 * this message.
-				 */
-				DHD_OS_WAKE_LOCK_WAIVE(bus->dhd);
-				dhdpcie_send_mb_data(bus, (H2D_HOST_D0_INFORM_IN_USE|H2D_HOST_D0_INFORM));
-				DHD_OS_WAKE_LOCK_RESTORE(bus->dhd);
-
+			if (dhd_os_check_wakelock_all(bus->dhd)) {
+				DHD_ERROR(("Suspend failed because of wakelock\n"));
 				bus->suspended = FALSE;
 				DHD_GENERAL_LOCK(bus->dhd, flags);
 				bus->dhd->busstate = DHD_BUS_DATA;
@@ -3637,9 +3562,6 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 				dhd_bus_set_device_wake(bus, FALSE);
 			}
 			bus->dhd->d3ackcnt_timeout = 0;
-#if defined(BCMPCIE_OOB_HOST_WAKE)
-			dhdpcie_oob_intr_set(bus, TRUE);
-#endif /* BCMPCIE_OOB_HOST_WAKE */
 		} else if (timeleft == 0) {
 			bus->dhd->d3ackcnt_timeout++;
 			DHD_ERROR(("%s: resumed on timeout for D3 ACK d3_inform_cnt %d \n",
@@ -3647,7 +3569,6 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 #if defined(DHD_FW_COREDUMP) && defined(CUSTOMER_HW4)
 			if (bus->dhd->memdump_enabled) {
 				/* write core dump to file */
-				bus->dhd->memdump_type = DUMP_TYPE_D3_ACK_TIMEOUT;
 				dhdpcie_mem_dump(bus);
 			}
 #endif /* DHD_FW_COREDUMP && CUSTOMER_HW4 */
@@ -4203,12 +4124,10 @@ void dhd_bus_dump(dhd_pub_t *dhdp, struct bcmstrbuf *strbuf)
 static void
 dhd_update_txflowrings(dhd_pub_t *dhd)
 {
-	unsigned long flags;
 	dll_t *item, *next;
 	flow_ring_node_t *flow_ring_node;
 	struct dhd_bus *bus = dhd->bus;
 
-	DHD_FLOWRING_LIST_LOCK(bus->dhd->flowring_list_lock, flags);
 	for (item = dll_head_p(&bus->const_flowring);
 		(!dhd_is_device_removed(dhd) && !dll_end(&bus->const_flowring, item));
 		item = next) {
@@ -4220,7 +4139,6 @@ dhd_update_txflowrings(dhd_pub_t *dhd)
 		flow_ring_node = dhd_constlist_to_flowring(item);
 		dhd_prot_update_txflowring(dhd, flow_ring_node->flowid, flow_ring_node->prot_info);
 	}
-	DHD_FLOWRING_LIST_UNLOCK(bus->dhd->flowring_list_lock, flags);
 }
 
 /** Mailbox ringbell Function */
@@ -4984,8 +4902,6 @@ dhdpcie_cc_nvmshadow(dhd_bus_t *bus, struct bcmstrbuf *b)
 	cur_coreid = si_coreid(bus->sih);
 	/* Switch to ChipC */
 	chipcregs = (chipcregs_t *)si_setcore(bus->sih, CC_CORE_ID, 0);
-	ASSERT(chipcregs != NULL);
-
 	chipc_corerev = si_corerev(bus->sih);
 
 	/* Check ChipcommonCore Rev */
@@ -5117,11 +5033,9 @@ void dhd_bus_clean_flow_ring(dhd_bus_t *bus, void *node)
 	flow_ring_node->status = FLOW_RING_STATUS_CLOSED;
 	flow_ring_node->active = FALSE;
 
-	DHD_FLOWRING_UNLOCK(flow_ring_node->lock, flags);
-
-	DHD_FLOWRING_LIST_LOCK(bus->dhd->flowring_list_lock, flags);
 	dll_delete(&flow_ring_node->list);
-	DHD_FLOWRING_LIST_UNLOCK(bus->dhd->flowring_list_lock, flags);
+
+	DHD_FLOWRING_UNLOCK(flow_ring_node->lock, flags);
 
 	/* Release the flowring object back into the pool */
 	dhd_prot_flowrings_pool_release(bus->dhd,
@@ -5194,8 +5108,7 @@ dhd_bus_flow_ring_delete_request(dhd_bus_t *bus, void *arg)
 	DHD_FLOWRING_LOCK(flow_ring_node->lock, flags);
 	if (flow_ring_node->status == FLOW_RING_STATUS_DELETE_PENDING) {
 		DHD_FLOWRING_UNLOCK(flow_ring_node->lock, flags);
-		DHD_ERROR(("%s :Delete Pending Flow %d\n",
-			__FUNCTION__, flow_ring_node->flowid));
+		DHD_ERROR(("%s :Delete Pending\n", __FUNCTION__));
 		return BCME_ERROR;
 	}
 	flow_ring_node->status = FLOW_RING_STATUS_DELETE_PENDING;

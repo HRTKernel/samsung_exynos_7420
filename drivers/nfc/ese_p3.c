@@ -971,8 +971,6 @@ static ssize_t p3_dev_read(struct file *filp, char *buf, size_t count,
 	P3_DBG_MSG("p3_dev_read count %zu - Enter \n", count);
 
 	mutex_lock(&p3_dev->buffer_mutex);
-	if (count > MAX_BUFFER_SIZE)
-		count = MAX_BUFFER_SIZE;
 
 	memset(&rx_buffer[0], 0x00, sizeof(rx_buffer));
 
@@ -1326,9 +1324,8 @@ static int p3_probe(struct spi_device *spi)
 	ret = misc_register(&p3_dev->p3_device);
 	if (ret < 0)
 	{
-		P3_ERR_MSG("%s misc_register failed! %d\n",
-				__func__, ret);
-		goto err_misc_regi;
+		P3_ERR_MSG("misc_register failed! %d\n", ret);
+		goto err_exit0;
 	}
 
 #if 0 //test
@@ -1375,20 +1372,16 @@ static int p3_probe(struct spi_device *spi)
 	gpio_direction_output(p3_dev->cs_gpio, 0);
 
 	ret = p3_regulator_onoff(p3_dev, 0);
-	if (ret < 0)
-	{
-		P3_ERR_MSG("%s failed to turn off LDO. [%d]\n",
-				__func__, ret);
-		goto err_ldo_off;
-	}
+	if(ret < 0)
+		P3_ERR_MSG(" test: failed to turn off LDO()\n");
 
 	p3_dev-> enable_poll_mode = 1; /* Default IRQ read mode */
 	P3_DBG_MSG("%s finished...\n", __FUNCTION__);
 	return ret;
 
-	err_ldo_off:
+	/*err_exit1:*/
 	misc_deregister(&p3_dev->p3_device);
-	err_misc_regi:
+	err_exit0:
 #ifdef FEATURE_ESE_WAKELOCK
 	wake_lock_destroy(&p3_dev->ese_lock);
 #endif

@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: bcmdefs.h 553280 2015-04-29 07:55:29Z $
+ * $Id: bcmdefs.h 530150 2015-01-29 08:43:40Z $
  */
 
 #ifndef	_bcmdefs_h_
@@ -279,13 +279,9 @@ typedef struct {
 
 /* Max. nvram variable table size */
 #ifndef MAXSZ_NVRAM_VARS
-#ifdef LARGE_NVRAM_MAXSZ
-#define MAXSZ_NVRAM_VARS	LARGE_NVRAM_MAXSZ
-#else
 /* SROM12 changes */
 #define	MAXSZ_NVRAM_VARS	6144
-#endif /* LARGE_NVRAM_MAXSZ */
-#endif /* !MAXSZ_NVRAM_VARS */
+#endif
 
 
 

@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: linux_osl.h 552134 2015-04-24 23:49:11Z $
+ * $Id: linux_osl.h 548977 2015-04-14 10:40:21Z $
  */
 
 #ifndef _linux_osl_h_
@@ -364,20 +364,11 @@ extern int osl_error(int bcmerror);
 #include <linuxver.h>		/* use current 2.4.x calling conventions */
 
 /* packet primitives */
-#ifdef BCM_OBJECT_TRACE
-#define	PKTGET(osh, len, send)		osl_pktget((osh), (len), __LINE__, __FUNCTION__)
-#define	PKTDUP(osh, skb)		osl_pktdup((osh), (skb), __LINE__, __FUNCTION__)
-#else
 #define	PKTGET(osh, len, send)		osl_pktget((osh), (len))
 #define	PKTDUP(osh, skb)		osl_pktdup((osh), (skb))
-#endif /* BCM_OBJECT_TRACE */
 #define PKTLIST_DUMP(osh, buf)		BCM_REFERENCE(osh)
 #define PKTDBG_TRACE(osh, pkt, bit)	BCM_REFERENCE(osh)
-#if defined(BCM_OBJECT_TRACE)
-#define	PKTFREE(osh, skb, send)		osl_pktfree((osh), (skb), (send), __LINE__, __FUNCTION__)
-#else
 #define	PKTFREE(osh, skb, send)		osl_pktfree((osh), (skb), (send))
-#endif /* BCM_OBJECT_TRACE */
 #ifdef CONFIG_DHD_USE_STATIC_BUF
 #define	PKTGET_STATIC(osh, len, send)		osl_pktget_static((osh), (len))
 #define	PKTFREE_STATIC(osh, skb, send)		osl_pktfree_static((osh), (skb), (send))
@@ -580,23 +571,14 @@ extern void osl_ctfpool_stats(osl_t *osh, void *b);
 #define	PKTCLRFAFREED(skb)	BCM_REFERENCE(skb)
 #endif /* BCMFA */
 
-#if defined(BCM_OBJECT_TRACE)
-extern void osl_pktfree(osl_t *osh, void *skb, bool send, int line, const char *caller);
-#else
 extern void osl_pktfree(osl_t *osh, void *skb, bool send);
-#endif /* BCM_OBJECT_TRACE */
 extern void *osl_pktget_static(osl_t *osh, uint len);
 extern void osl_pktfree_static(osl_t *osh, void *skb, bool send);
 extern void osl_pktclone(osl_t *osh, void **pkt);
 
-#ifdef BCM_OBJECT_TRACE
-extern void *osl_pktget(osl_t *osh, uint len, int line, const char *caller);
-extern void *osl_pktdup(osl_t *osh, void *skb, int line, const char *caller);
-#else
+extern void *osl_pkt_frmnative(osl_t *osh, void *skb);
 extern void *osl_pktget(osl_t *osh, uint len);
 extern void *osl_pktdup(osl_t *osh, void *skb);
-#endif /* BCM_OBJECT_TRACE */
-extern void *osl_pkt_frmnative(osl_t *osh, void *skb);
 extern struct sk_buff *osl_pkt_tonative(osl_t *osh, void *pkt);
 #define PKTFRMNATIVE(osh, skb)	osl_pkt_frmnative(((osl_t *)osh), (struct sk_buff*)(skb))
 #define PKTTONATIVE(osh, pkt)		osl_pkt_tonative((osl_t *)(osh), (pkt))

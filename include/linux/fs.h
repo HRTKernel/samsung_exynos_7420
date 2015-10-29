@@ -436,7 +436,6 @@ struct address_space {
 #ifdef CONFIG_CRYPTO_FIPS
 	bool			cc_enable;	/* cc flag */
 #endif
-	bool			plain_text;	/* plain text flag */
 #endif
 #ifdef CONFIG_SDP
 	int userid;
@@ -484,8 +483,6 @@ struct block_device {
 	int			bd_fsfreeze_count;
 	/* Mutex for freeze */
 	struct mutex		bd_fsfreeze_mutex;
-
-	void			(*bd_fscallback_func) (struct block_device *);
 };
 
 /*

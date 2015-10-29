@@ -97,19 +97,8 @@
 #define DPC_CPUCORE 4
 #define RXF_CPUCORE 5
 #define TASKLET_CPUCORE 5
-/*
- * If Load Balance is enabled do not use ARGOS feature.
- * Note that UNIVERSAL5433 and UNIVERSAL7420 are big/little
- * platform so the CPU Masks are defined accordingly. That is
- * Big Cores are 7-4 and Little Cores are 3-1.
- */
-#if defined(DHD_LB)
-#define DHD_LB_PRIMARY_CPUS	(0xF0)
-#define DHD_LB_SECONDARY_CPUS	(0x0E)
-#else
 #define ARGOS_CPU_SCHEDULER
 #define ARGOS_RPS_CPU_CTL
-#endif /* !defined(DHD_LB) */
 
 #elif defined(CONFIG_MACH_HL3G) || defined(CONFIG_MACH_HLLTE) || \
 	defined(CONFIG_MACH_UNIVERSAL5422) || defined(CONFIG_MACH_UNIVERSAL5430)

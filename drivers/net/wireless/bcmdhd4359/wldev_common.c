@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wldev_common.c 556083 2015-05-12 14:03:00Z $
+ * $Id: wldev_common.c 527456 2015-01-19 06:05:03Z $
  */
 
 #include <osl.h>
@@ -418,7 +418,6 @@ int wldev_set_country(
 	}
 
 	if ((error < 0) ||
-			dhd_force_country_change(dev) ||
 	    (strncmp(country_code, cspec.country_abbrev, WLC_CNTRY_BUF_SZ) != 0)) {
 
 		if (user_enforced) {

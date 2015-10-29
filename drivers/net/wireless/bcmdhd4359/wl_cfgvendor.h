@@ -31,6 +31,10 @@
 #ifndef _wl_cfgvendor_h_
 #define _wl_cfgvendor_h_
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 14, 0)) && !defined(VENDOR_EXT_SUPPORT)
+#define VENDOR_EXT_SUPPORT
+#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 14, 0) && !VENDOR_EXT_SUPPORT */
+
 #define OUI_BRCM    0x001018
 #define OUI_GOOGLE  0x001A11
 #define BRCM_VENDOR_SUBCMD_PRIV_STR	1
@@ -251,12 +255,13 @@ typedef enum gscan_complete_event {
 	WIFI_SCAN_COMPLETE
 } gscan_complete_event_t;
 
+#define OUI_GOOGLE  0x001A11
 /* Capture the BRCM_VENDOR_SUBCMD_PRIV_STRINGS* here */
 #define BRCM_VENDOR_SCMD_CAPA	"cap"
 
-#if defined(WL_VENDOR_EXT_SUPPORT) || defined(CONFIG_BCMDHD_VENDOR_EXT)
-extern int wl_cfgvendor_attach(struct wiphy *wiphy);
-extern int wl_cfgvendor_detach(struct wiphy *wiphy);
+#ifdef VENDOR_EXT_SUPPORT
+extern int cfgvendor_attach(struct wiphy *wiphy);
+extern int cfgvendor_detach(struct wiphy *wiphy);
 extern int wl_cfgvendor_send_async_event(struct wiphy *wiphy,
                   struct net_device *dev, int event_id, const void  *data, int len);
 extern int wl_cfgvendor_send_hotlist_event(struct wiphy *wiphy,
@@ -264,6 +269,6 @@ extern int wl_cfgvendor_send_hotlist_event(struct wiphy *wiphy,
 #else
 static INLINE int cfgvendor_attach(struct wiphy *wiphy) { return 0; }
 static INLINE int cfgvendor_detach(struct wiphy *wiphy) { return 0; }
-#endif /* defined(WL_VENDOR_EXT_SUPPORT) */
+#endif /*  VENDOR_EXT_SUPPORT */
 
 #endif /* _wl_cfgvendor_h_ */

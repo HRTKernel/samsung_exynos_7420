@@ -565,7 +565,7 @@ int fmp_run(struct fmp_info *info, struct fcrypt *fcr, struct kernel_crypt_op *k
 	struct device *dev = info->dev;
 	struct csession *ses_ptr;
 	struct crypt_op *cop = &kcop->cop;
-	int ret = -EINVAL;
+	int ret;
 
 	if (unlikely(cop->op != COP_ENCRYPT && cop->op != COP_DECRYPT)) {
 		dev_err(dev, "invalid operation op=%u\n", cop->op);
@@ -726,10 +726,15 @@ int fmp_run_AES_CBC_MCT(struct fmp_info *info, struct fcrypt *fcr,
 			memcpy(Ct[y], data, nbytes);
 
 			if (y == 998) {
-				if (unlikely(copy_to_user(secondLast, data, nbytes)))
+				if (unlikely(copy_to_user(secondLast, data, nbytes))) {
+					int i = 0;
 					printk(KERN_ERR "unable to copy second last data for AES_CBC_MCT\n");
-				else
+					for(i = 0; i < nbytes; i++)
+						printk("%2x", (char)data[i]);
+					printk("\n");
+				} else {
 					printk(KERN_ERR "KAMAL copied secondlast data\n");
+				}
 			}
 
 			if( y == 0) {
@@ -737,11 +742,6 @@ int fmp_run_AES_CBC_MCT(struct fmp_info *info, struct fcrypt *fcr,
 			} else {
 				if(y != 999)
 					memcpy(data, Ct[y-1], nbytes);
-			}
-
-			if (unlikely(ret)) {
-				printk(KERN_ERR "fmp_n_crypt failed.\n");
-				goto out_err;
 			}
 
 			if (cop->op == COP_ENCRYPT)
@@ -769,6 +769,8 @@ int fmp_run_AES_CBC_MCT(struct fmp_info *info, struct fcrypt *fcr,
 		} else
 			goto out_unlock;
 
+		if (unlikely(ret))
+			goto out_unlock;
 	}
 
 out_unlock:

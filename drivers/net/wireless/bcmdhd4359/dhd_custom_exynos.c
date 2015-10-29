@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_custom_exynos.c 563761 2015-06-15 14:53:17Z $
+ * $Id: dhd_custom_exynos.c 548789 2015-04-14 02:04:14Z $
  */
 #include <linux/device.h>
 #include <linux/gpio.h>
@@ -86,10 +86,6 @@ extern int argos_irq_affinity_setup_label(unsigned int irq, const char *label,
 	struct cpumask *affinity_cpu_mask,
 	struct cpumask *default_cpu_mask);
 #endif /* CONFIG_ARGOS */
-#ifdef CONFIG_MACH_UNIVERSAL3475
-extern struct mmc_host *wlan_mmc;
-extern void mmc_ctrl_power(struct mmc_host *host, bool onoff);
-#endif /* CONFIG_MACH_UNIVERSAL3475 */
 
 static int
 dhd_wlan_power(int onoff)
@@ -148,10 +144,7 @@ dhd_wlan_power(int onoff)
 	}
 #endif /* CONFIG_MACH_A7LTE */
 #endif /* CONFIG_MACH_UNIVERSAL5433 || CONFIG_MACH_UNIVERSAL7420 */
-#ifdef CONFIG_MACH_UNIVERSAL3475
-	if (wlan_mmc)
-		mmc_ctrl_power(wlan_mmc, onoff);
-#endif /* CONFIG_MACH_UNIVERSAL3475 */
+
 	return 0;
 }
 

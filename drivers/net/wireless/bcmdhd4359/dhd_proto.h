@@ -27,7 +27,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_proto.h 561165 2015-06-03 17:00:47Z $
+ * $Id: dhd_proto.h 541060 2015-03-13 23:28:01Z $
  */
 
 #ifndef _dhd_proto_h_
@@ -48,11 +48,6 @@
 #ifndef MFG_IOCTL_RESP_TIMEOUT
 #define MFG_IOCTL_RESP_TIMEOUT  20000  /* In milli second default value for MFG FW */
 #endif /* MFG_IOCTL_RESP_TIMEOUT */
-
-#define DEFAULT_D3_ACK_RESP_TIMEOUT	4000
-#ifndef D3_ACK_RESP_TIMEOUT
-#define D3_ACK_RESP_TIMEOUT		DEFAULT_D3_ACK_RESP_TIMEOUT
-#endif /* D3_ACK_RESP_TIMEOUT */
 
 #define IOCTL_DISABLE_TIMEOUT 0
 /*

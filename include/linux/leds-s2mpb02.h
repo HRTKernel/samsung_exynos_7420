@@ -130,7 +130,6 @@ struct s2mpb02_led {
 	int id;
 	int brightness;
 	int timeout;
-	int irda_off;
 };
 
 struct s2mpb02_led_platform_data {

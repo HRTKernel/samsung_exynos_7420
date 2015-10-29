@@ -1564,7 +1564,7 @@ struct samsung_pin_ctrl exynos7420_pin_ctrl[] = {
 		.svc		= EXYNOS_SVC_OFFSET,
 		.gpio_type	= EXYNOS_GPIO_TYPE_DRV_SEPARATE,
 		.eint_gpio_init = exynos_eint_gpio_init,
-#if !defined(CONFIG_MST_SECURE_GPIO) || defined(CONFIG_MST_NOBLE_TARGET) || defined(CONFIG_MST_ZEN_TARGET)
+#ifndef CONFIG_MST_SECURE_GPIO
 		.suspend	= exynos5430_pinctrl_suspend,
 		.resume		= exynos5430_pinctrl_resume,
 #endif

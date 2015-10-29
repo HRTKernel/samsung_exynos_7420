@@ -205,6 +205,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"BN", "BN", 4},
 	{"BG", "BG", 4},
 	{"KH", "KH", 2},
+	{"CA", "US", 0},
 	{"KY", "KY", 3},
 	{"CN", "CN", 38},
 	{"CO", "CO", 17},
@@ -314,14 +315,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"LY", "LI", 4},
 	{"BO", "NG", 0},
 	{"UM", "PR", 38},
-#if defined(BCM4359_CHIP)
-	/* Support FCC 15.407 (Part 15E) Changes, effective June 2 2014 */
-	{"US", "US", 988},
-	{"CA", "Q2", 993},
-#else
-	{"CA", "US", 1},
-	{"US", "US", 1},
-#endif
+	{"CU", "US", 0},
 #endif /* default ccode/regrev */
 };
 
@@ -360,8 +354,7 @@ void get_customized_country_code(void *adapter, char *country_iso_code, wl_count
 #define REVINFO "/opt/etc/.rev"
 #define WIFIVERINFO "/opt/etc/.wifiver.info"
 #define ANTINFO "/opt/etc/.ant.info"
-#define RSDBINFO "/opt/etc/.rsdb.info"
-#define LOGTRACEINFO "/opt/etc/.logtrace.info"
+#define MEMDUMPINFO "/opt/etc/.memdump.info"
 #define WRMAC_BUF_SIZE 19
 #else
 #define MACINFO "/data/.mac.info"
@@ -372,8 +365,7 @@ void get_customized_country_code(void *adapter, char *country_iso_code, wl_count
 #define PSMINFO "/data/.psm.info"
 #define WIFIVERINFO "/data/.wifiver.info"
 #define ANTINFO "/data/.ant.info"
-#define RSDBINFO "/data/.rsdb.info"
-#define LOGTRACEINFO "/data/.logtrace.info"
+#define MEMDUMPINFO "/data/.memdump.info"
 #define WRMAC_BUF_SIZE 18
 #endif /* PLATFORM_SLP */
 
@@ -524,7 +516,7 @@ static void dhd_dump_cis(const unsigned char *buf, int size)
 #define MAX_VNAME_LEN		16
 
 #ifdef	SUPPORT_MULTIPLE_BOARDTYPE
-#define MAX_BNAME_LEN		6
+#define MAX_BNAME_LEN		5
 
 typedef struct {
 	uint8 b_len;
@@ -532,15 +524,9 @@ typedef struct {
 	char bname[MAX_BNAME_LEN];
 } board_info_t;
 
-board_info_t semco_board_info[] = {
-	{ 3, { 0x51, 0x07, }, { "_b90b" } },     /* semco three antenna */
-	{ 3, { 0x61, 0x07, }, { "_b90b" } },     /* semco two antenna */
-	{ 0, { 0x00, }, { "" } }   /* Default: Not specified yet */
-};
-board_info_t murata_board_info[] = {
-	{ 3, { 0xa5, 0x07, }, { "_b90" } },      /* murata three antenna */
-	{ 3, { 0xb0, 0x07, }, { "_b90b" } },     /* murata two antenna */
-	{ 3, { 0xb1, 0x07, }, { "_es5" } },     /* murata two antenna */
+board_info_t board_info[] = {
+	{ 3, { 0x51, 0x07, }, { "_b90" } },     /* three antenna */
+	{ 3, { 0x61, 0x07, }, { "_b90b" } },    /* two antenna */
 	{ 0, { 0x00, }, { "" } }   /* Default: Not specified yet */
 };
 #else
@@ -616,13 +602,9 @@ vid_info_t vid_info[] = {
 	{ 3, { 0x34, 0x33, }, { "semco" } },
 	{ 3, { 0x40, 0x33, }, { "semco" } },
 	{ 3, { 0x41, 0x33, }, { "semco" } },
-	{ 3, { 0x11, 0x33, }, { "semco" } },
 	{ 3, { 0x33, 0x66, }, { "semco" } },
 	{ 3, { 0x23, 0x22, }, { "murata" } },
-	{ 3, { 0x40, 0x22, }, { "murata" } },
-	{ 3, { 0x51, 0x22, }, { "murata" } },
-	{ 3, { 0x52, 0x22, }, { "murata" } },
-	{ 3, { 0x10, 0x90, }, { "wisol" } },
+	{ 3, { 0x90, 0x10, }, { "wisol" } },
 	{ 0, { 0x00, }, { "samsung" } }           /* Default: Not specified yet */
 };
 #else
@@ -642,10 +624,9 @@ int dhd_check_module_cid(dhd_pub_t *dhd)
 	unsigned char *vid_start;
 	unsigned char vid_length;
 #ifdef SUPPORT_MULTIPLE_BOARDTYPE
-	board_info_t *cur_b_info = NULL;
-	board_info_t *vendor_b_info = NULL;
+	board_info_t *cur_b_info;
 	unsigned char *btype_start;
-	unsigned char boardtype_len = 0;
+	unsigned char boardtype_len;
 #endif /* SUPPORT_MULTIPLE_BOARDTYPE */
 	unsigned char cid_info[MAX_VNAME_LEN + MAX_BNAME_LEN];
 	bool found = false;
@@ -677,6 +658,41 @@ int dhd_check_module_cid(dhd_pub_t *dhd)
 #ifdef DUMP_CIS
 	dhd_dump_cis(cis_buf, 48);
 #endif
+
+#ifdef SUPPORT_MULTIPLE_BOARDTYPE
+	max = sizeof(cis_buf) - 4;
+	for (idx = 0; idx < max; idx++) {
+		if (cis_buf[idx] == CIS_TUPLE_TAG_START &&
+			cis_buf[idx + 2] == CIS_TUPLE_TAG_BOARDTYPE) {
+			boardtype_len = cis_buf[idx + 1];
+			btype_start = &cis_buf[idx + 3];
+
+			/* Check buffer overflow */
+			if (&cis_buf[idx + 1] + boardtype_len <= &cis_buf[CIS_BUF_SIZE - 1]) {
+				found = true;
+				DHD_INFO(("[WIFI_SEC] %s: board type found.\n", __FUNCTION__));
+				break;
+			}
+		}
+	}
+
+	if (found) {
+		max = sizeof(board_info) / sizeof(board_info_t);
+		for (idx = 0; idx < max; idx++) {
+			cur_b_info = &board_info[idx];
+			if ((cur_b_info->b_len == boardtype_len) &&
+				(cur_b_info->b_len != 0) &&
+				(memcmp(cur_b_info->btype, btype_start,
+					cur_b_info->b_len - 1) == 0)) {
+				found = false;
+				DHD_INFO(("[WIFI_SEC] %s : board type name : %s\n",
+					__FUNCTION__, cur_b_info->bname));
+				break;
+			}
+		}
+	}
+#endif /* SUPPORT_MULTIPLE_BOARDTYPE  */
+
 	/* 4 byte : [TAG_START] [VID_LENGTH] [TAG_VENDOR] [VID_START] */
 	max = sizeof(cis_buf) - 4;
 	for (idx = 0; idx < max; idx++) {
@@ -702,13 +718,13 @@ int dhd_check_module_cid(dhd_pub_t *dhd)
 				if (cur_info->vid[0] == vid_start[0] &&
 				    cur_info->vid[3] == vid_start[3] &&
 				    cur_info->vid[4] == vid_start[4])
-				goto check_board_type;
+				goto write_cid;
 			}
 #endif /* BCM4358_CHIP */
 			if ((cur_info->vid_length == vid_length) &&
 				(cur_info->vid_length != 0) &&
 				(memcmp(cur_info->vid, vid_start, cur_info->vid_length - 1) == 0))
-				goto check_board_type;
+				goto write_cid;
 		}
 	}
 
@@ -723,57 +739,9 @@ int dhd_check_module_cid(dhd_pub_t *dhd)
 	DHD_ERROR(("[WIFI_SEC] %s: cannot find default CID\n", __FUNCTION__));
 	return -1;
 
-check_board_type:
-#ifdef SUPPORT_MULTIPLE_BOARDTYPE
-	max = sizeof(cis_buf) - 4;
-	for (idx = 0; idx < max; idx++) {
-		if (cis_buf[idx] == CIS_TUPLE_TAG_START &&
-			cis_buf[idx + 2] == CIS_TUPLE_TAG_BOARDTYPE) {
-			boardtype_len = cis_buf[idx + 1];
-			btype_start = &cis_buf[idx + 3];
-
-			/* Check buffer overflow */
-			if (&cis_buf[idx + 1] + boardtype_len
-				<= &cis_buf[CIS_BUF_SIZE - 1]) {
-				DHD_INFO(("[WIFI_SEC] %s: board type found.\n",
-					__FUNCTION__));
-				break;
-			} else {
-				boardtype_len = 0;
-			}
-		}
-	}
-
-	if (strcmp(cur_info->vname, "semco") == 0) {
-		vendor_b_info = semco_board_info;
-		max = sizeof(semco_board_info) / sizeof(board_info_t);
-	} else if (strcmp(cur_info->vname, "murata") == 0) {
-		vendor_b_info = murata_board_info;
-		max = sizeof(murata_board_info) / sizeof(board_info_t);
-	} else {
-		max = 0;
-	}
-
-	if (boardtype_len) {
-		for (idx = 0; idx < max; idx++) {
-			cur_b_info = vendor_b_info;
-			if ((cur_b_info->b_len == boardtype_len) &&
-					(cur_b_info->b_len != 0) &&
-					(memcmp(cur_b_info->btype, btype_start,
-					cur_b_info->b_len - 1) == 0)) {
-				DHD_INFO(("[WIFI_SEC] %s : board type name : %s\n",
-					__FUNCTION__, cur_b_info->bname));
-				break;
-			}
-			cur_b_info = NULL;
-			vendor_b_info++;
-		}
-	}
-#endif /* SUPPORT_MULTIPLE_BOARDTYPE */
-
 write_cid:
 #ifdef SUPPORT_MULTIPLE_BOARDTYPE
-	if (cur_b_info && cur_b_info->b_len > 0) {
+	if (cur_b_info->b_len > 0) {
 		strcpy(cid_info, cur_info->vname);
 		strcpy(cid_info + strlen(cur_info->vname), cur_b_info->bname);
 	} else
@@ -1168,13 +1136,12 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 	}
 
 	/* rsdb mode off */
-	DHD_ERROR(("[WIFI_SEC] %s: %s the RSDB mode!\n",
-		__FUNCTION__, rsdb_mode ? "Enable" : "Disable"));
 	bcm_mkiovar("rsdb_mode", (char *)&rsdb_mode, 4, iovbuf, sizeof(iovbuf));
 	ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
 	if (ret) {
-		DHD_ERROR(("[WIFI_SEC] %s: Fail to execute dhd_wl_ioctl_cmd(): "
-			"rsdb_mode, ret=%d\n", __FUNCTION__, ret));
+		DHD_ERROR(("[WIFI_SEC] %s: Fail to execute dhd_wl_ioctl_cmd():  "
+			"rsdb_mode, ret=%d\n",
+			__FUNCTION__, ret));
 		return ret;
 	}
 
@@ -1199,111 +1166,8 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 }
 #endif /* MIMO_ANTENNA_SETTING */
 
-#ifdef RSDB_MODE_FROM_FILE
-/*
- * RSDBOFFINFO = /data/.rsdb.info
- *  - rsdb_mode = 1            => Don't change RSDB mode / RSDB stay as turn on
- *  - rsdb_mode = 0            => Trun Off RSDB mode
- *  - file not exist          => Don't change RSDB mode / RSDB stay as turn on
- */
-int dhd_rsdb_mode_from_file(dhd_pub_t *dhd)
-{
-	struct file *fp = NULL;
-	int ret = -1;
-	uint32 rsdb_mode = 0;
-	char *filepath = RSDBINFO;
-	char iovbuf[WLC_IOCTL_SMLEN];
-
-	/* Read RSDB on/off request from the file */
-	fp = filp_open(filepath, O_RDONLY, 0);
-	if (IS_ERR(fp)) {
-		DHD_ERROR(("[WIFI_SEC] %s: File [%s] doesn't exist\n", __FUNCTION__, filepath));
-		return ret;
-	} else {
-		ret = kernel_read(fp, 0, (char *)&rsdb_mode, 4);
-		if (ret < 0) {
-			DHD_ERROR(("[WIFI_SEC] %s: File read error, ret=%d\n", __FUNCTION__, ret));
-			filp_close(fp, NULL);
-			return ret;
-		}
-
-		rsdb_mode = bcm_atoi((char *)&rsdb_mode);
-
-		DHD_ERROR(("[WIFI_SEC] %s: RSDB mode from file = %d\n", __FUNCTION__, rsdb_mode));
-		filp_close(fp, NULL);
-
-		/* Check value from the file */
-		if (rsdb_mode > 2) {
-			DHD_ERROR(("[WIFI_SEC] %s: Invalid value %d read from the file %s\n",
-				__FUNCTION__, rsdb_mode, filepath));
-			return -1;
-		}
-	}
-
-	if (rsdb_mode == 0) {
-		bcm_mkiovar("rsdb_mode", (char *)&rsdb_mode, sizeof(rsdb_mode),
-			iovbuf, sizeof(iovbuf));
-
-		if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR,
-				iovbuf, sizeof(iovbuf), TRUE, 0)) < 0) {
-			DHD_ERROR(("[WIFI_SEC] %s: rsdb_mode ret= %d\n", __FUNCTION__, ret));
-		} else {
-			DHD_ERROR(("[WIFI_SEC] %s: rsdb_mode to MIMO(RSDB OFF) succeeded\n",
-				__FUNCTION__));
-		}
-	}
-
-	return ret;
-}
-#endif /* RSDB_MODE_FROM_FILE */
-
-#ifdef LOGTRACE_FROM_FILE
-/*
- * LOGTRACEINFO = /data/.logtrace.info
- *  - logtrace = 1            => Enable LOGTRACE Event
- *  - logtrace = 0            => Disable LOGTRACE Event
- *  - file not exist          => Disable LOGTRACE Event
- */
-int dhd_logtrace_from_file(dhd_pub_t *dhd)
-{
-	struct file *fp = NULL;
-	int ret = -1;
-	uint32 logtrace = 0;
-	char *filepath = LOGTRACEINFO;
-
-	/* Read LOGTRACE Event on/off request from the file */
-	fp = filp_open(filepath, O_RDONLY, 0);
-	if (IS_ERR(fp)) {
-		DHD_ERROR(("[WIFI_SEC] %s: File [%s] doesn't exist\n", __FUNCTION__, filepath));
-		return 0;
-	} else {
-		ret = kernel_read(fp, 0, (char *)&logtrace, 4);
-		if (ret < 0) {
-			DHD_ERROR(("[WIFI_SEC] %s: File read error, ret=%d\n", __FUNCTION__, ret));
-			filp_close(fp, NULL);
-			return 0;
-		}
-
-		logtrace = bcm_atoi((char *)&logtrace);
-
-		DHD_ERROR(("[WIFI_SEC] %s: LOGTRACE On/Off from file = %d\n",
-			__FUNCTION__, logtrace));
-		filp_close(fp, NULL);
-
-		/* Check value from the file */
-		if (logtrace > 2) {
-			DHD_ERROR(("[WIFI_SEC] %s: Invalid value %d read from the file %s\n",
-				__FUNCTION__, logtrace, filepath));
-			return 0;
-		}
-	}
-
-	return (int)logtrace;
-}
-#endif /* LOGTRACE_FROM_FILE */
-
 #ifdef USE_WFA_CERT_CONF
-int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
+int sec_get_param(dhd_pub_t *dhd, int mode, uint* read_val)
 {
 	struct file *fp = NULL;
 	char *filepath = NULL;
@@ -1338,24 +1202,22 @@ int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
 			break;
 #endif /* PROP_TXSTATUS */
 		default:
-			DHD_ERROR(("[WIFI_SEC] %s: File to find file name for index=%d\n",
-				__FUNCTION__, mode));
-			return BCME_ERROR;
+			return -EINVAL;
 	}
 
 	fp = filp_open(filepath, O_RDONLY, 0);
 	if (IS_ERR(fp) || (fp == NULL)) {
-		DHD_ERROR(("[WIFI_SEC] %s: File [%s] doesn't exist \n",
+		DHD_ERROR(("[WIFI_SEC] %s: File open failed, file path=%s\n",
 			__FUNCTION__, filepath));
 		return BCME_ERROR;
 	} else {
 		if (kernel_read(fp, fp->f_pos, (char *)&val, 4) < 0) {
-			filp_close(fp, NULL);
+		filp_close(fp, NULL);
 			/* File operation is failed so we will return error code */
 			DHD_ERROR(("[WIFI_SEC] %s: read failed, file path=%s\n",
 				__FUNCTION__, filepath));
 			return BCME_ERROR;
-		}
+	}
 		filp_close(fp, NULL);
 	}
 
@@ -1513,6 +1375,38 @@ uint32 sec_save_wlinfo(char *firm_ver, char *dhd_ver, char *nvram_p)
 	return ret;
 }
 #endif /* WRITE_WLANINFO */
+
+#ifdef DHD_FW_COREDUMP
+void dhd_get_memdump_info(dhd_pub_t *dhd)
+{
+	struct file *fp = NULL;
+	uint32 mem_val = 0;
+	int ret = 0;
+	char *filepath = MEMDUMPINFO;
+
+	/* Read memdump info from the file */
+	fp = filp_open(filepath, O_RDONLY, 0);
+	if (IS_ERR(fp)) {
+		DHD_ERROR(("[WIFI_SEC] %s: File [%s] doesn't exist\n", __FUNCTION__, filepath));
+		goto done;
+	} else {
+		ret = kernel_read(fp, 0, (char *)&mem_val, 4);
+		if (ret < 0) {
+			DHD_ERROR(("[WIFI_SEC] %s: File read error, ret=%d\n", __FUNCTION__, ret));
+			filp_close(fp, NULL);
+			goto done;
+		}
+
+		mem_val = bcm_atoi((char *)&mem_val);
+
+		DHD_ERROR(("[WIFI_SEC]%s: MEMDUMP ENABLED = %d\n", __FUNCTION__, mem_val));
+		filp_close(fp, NULL);
+	}
+
+done:
+	dhd->memdump_enabled = (mem_val < DUMP_MEMFILE_MAX) ? mem_val : DUMP_DISABLED;
+}
+#endif /* DHD_FW_COREDUMP */
 
 #if defined(SUPPORT_MULTIPLE_MODULE_CIS) && defined(USE_CID_CHECK)
 int dhd_check_module_b85a(dhd_pub_t *dhd)

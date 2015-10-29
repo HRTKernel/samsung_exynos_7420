@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: linux_osl.c 559386 2015-05-27 12:43:24Z $
+ * $Id: linux_osl.c 551290 2015-04-22 22:54:54Z $
  */
 
 #define LINUX_PORT
@@ -73,35 +73,17 @@
 #include <linux/fs.h>
 
 
-#ifdef BCM_OBJECT_TRACE
-#include <bcmutils.h>
-#endif /* BCM_OBJECT_TRACE */
-
 #define PCI_CFG_RETRY		10
 
 #define OS_HANDLE_MAGIC		0x1234abcd	/* Magic # to recognize osh */
 #define BCM_MEM_FILENAME_LEN	24		/* Mem. filename length */
 #define DUMPBUFSZ 1024
 
-/* dependancy check */
-#if !defined(BCMPCIE) && defined(DHD_USE_STATIC_CTRLBUF)
-#error "DHD_USE_STATIC_CTRLBUF suppored PCIE target only"
-#endif /* !BCMPCIE && DHD_USE_STATIC_CTRLBUF */
-
 #ifdef CONFIG_DHD_USE_STATIC_BUF
-#ifdef DHD_USE_STATIC_CTRLBUF
-#define DHD_SKB_1PAGE_BUFSIZE	(PAGE_SIZE*1)
-#define DHD_SKB_2PAGE_BUFSIZE	(PAGE_SIZE*2)
-#define DHD_SKB_4PAGE_BUFSIZE	(PAGE_SIZE*4)
-
-#define PREALLOC_FREE_MAGIC	0xFEDC
-#define PREALLOC_USED_MAGIC	0xFCDE
-#else
 #define DHD_SKB_HDRSIZE		336
 #define DHD_SKB_1PAGE_BUFSIZE	((PAGE_SIZE*1)-DHD_SKB_HDRSIZE)
 #define DHD_SKB_2PAGE_BUFSIZE	((PAGE_SIZE*2)-DHD_SKB_HDRSIZE)
 #define DHD_SKB_4PAGE_BUFSIZE	((PAGE_SIZE*4)-DHD_SKB_HDRSIZE)
-#endif /* DHD_USE_STATIC_CTRLBUF */
 
 #define STATIC_BUF_MAX_NUM	16
 #define STATIC_BUF_SIZE	(PAGE_SIZE*2)
@@ -115,45 +97,23 @@ typedef struct bcm_static_buf {
 
 static bcm_static_buf_t *bcm_static_buf = 0;
 
-#ifdef DHD_USE_STATIC_CTRLBUF
-#define STATIC_PKT_4PAGE_NUM	0
-#define DHD_SKB_MAX_BUFSIZE	DHD_SKB_2PAGE_BUFSIZE
-#elif defined(ENHANCED_STATIC_BUF)
+#define STATIC_PKT_MAX_NUM	8
+#if defined(ENHANCED_STATIC_BUF)
 #define STATIC_PKT_4PAGE_NUM	1
 #define DHD_SKB_MAX_BUFSIZE	DHD_SKB_4PAGE_BUFSIZE
 #else
 #define STATIC_PKT_4PAGE_NUM	0
-#define DHD_SKB_MAX_BUFSIZE	DHD_SKB_2PAGE_BUFSIZE
-#endif /* DHD_USE_STATIC_CTRLBUF */
-
-#ifdef DHD_USE_STATIC_CTRLBUF
-#define STATIC_PKT_1PAGE_NUM	0
-#define STATIC_PKT_2PAGE_NUM	64
-#else
-#define STATIC_PKT_1PAGE_NUM	8
-#define STATIC_PKT_2PAGE_NUM	8
-#endif /* DHD_USE_STATIC_CTRLBUF */
-
-#define STATIC_PKT_1_2PAGE_NUM	\
-	((STATIC_PKT_1PAGE_NUM) + (STATIC_PKT_2PAGE_NUM))
-#define STATIC_PKT_MAX_NUM	\
-	((STATIC_PKT_1_2PAGE_NUM) + (STATIC_PKT_4PAGE_NUM))
+#define DHD_SKB_MAX_BUFSIZE DHD_SKB_2PAGE_BUFSIZE
+#endif /* ENHANCED_STATIC_BUF */
 
 typedef struct bcm_static_pkt {
-#ifdef DHD_USE_STATIC_CTRLBUF
-	struct sk_buff *skb_8k[STATIC_PKT_2PAGE_NUM];
-	unsigned char pkt_invalid[STATIC_PKT_2PAGE_NUM];
-	spinlock_t osl_pkt_lock;
-	uint32 last_allocated_index;
-#else
-	struct sk_buff *skb_4k[STATIC_PKT_1PAGE_NUM];
-	struct sk_buff *skb_8k[STATIC_PKT_2PAGE_NUM];
+	struct sk_buff *skb_4k[STATIC_PKT_MAX_NUM];
+	struct sk_buff *skb_8k[STATIC_PKT_MAX_NUM];
 #ifdef ENHANCED_STATIC_BUF
 	struct sk_buff *skb_16k;
-#endif /* ENHANCED_STATIC_BUF */
+#endif
 	struct semaphore osl_pkt_sem;
-#endif /* DHD_USE_STATIC_CTRLBUF */
-	unsigned char pkt_use[STATIC_PKT_MAX_NUM];
+	unsigned char pkt_use[STATIC_PKT_MAX_NUM * 2 + STATIC_PKT_4PAGE_NUM];
 } bcm_static_pkt_t;
 
 static bcm_static_pkt_t *bcm_static_skb = 0;
@@ -237,18 +197,6 @@ static void *osl_sec_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bi
 static void osl_sec_dma_free_consistent(osl_t *osh, void *va, uint size, dmaaddr_t pa);
 #endif /* BCM_SECURE_DMA */
 
-#ifdef BCM_OBJECT_TRACE
-/* don't clear the first 4 byte that is the pkt sn */
-#define OSL_PKTTAG_CLEAR(p) \
-do { \
-	struct sk_buff *s = (struct sk_buff *)(p); \
-	ASSERT(OSL_PKTTAG_SZ == 32); \
-	*(uint32 *)(&s->cb[4]) = 0; \
-	*(uint32 *)(&s->cb[8]) = 0; *(uint32 *)(&s->cb[12]) = 0; \
-	*(uint32 *)(&s->cb[16]) = 0; *(uint32 *)(&s->cb[20]) = 0; \
-	*(uint32 *)(&s->cb[24]) = 0; *(uint32 *)(&s->cb[28]) = 0; \
-} while (0)
-#else
 #define OSL_PKTTAG_CLEAR(p) \
 do { \
 	struct sk_buff *s = (struct sk_buff *)(p); \
@@ -258,7 +206,6 @@ do { \
 	*(uint32 *)(&s->cb[16]) = 0; *(uint32 *)(&s->cb[20]) = 0; \
 	*(uint32 *)(&s->cb[24]) = 0; *(uint32 *)(&s->cb[28]) = 0; \
 } while (0)
-#endif /* BCM_OBJECT_TRACE */
 
 /* PCMCIA attribute space access macros */
 
@@ -379,8 +326,6 @@ osl_attach(void *pdev, uint bustype, bool pkttag)
 	}
 	atomic_add(1, &osh->cmn->refcount);
 
-	bcm_object_trace_init();
-
 	/* Check that error map has the right number of entries in it */
 	ASSERT(ABS(BCME_LAST) == (ARRAYSIZE(linuxbcmerrormap) - 1));
 
@@ -450,16 +395,17 @@ int osl_static_mem_init(osl_t *osh, void *adapter)
 				bcm_static_skb = NULL;
 				ASSERT(osh->magic == OS_HANDLE_MAGIC);
 				return -ENOMEM;
-			} else {
-				printk("alloc static buf at %p!\n", bcm_static_buf);
 			}
+			else
+				printk("alloc static buf at %p!\n", bcm_static_buf);
+
 
 			sema_init(&bcm_static_buf->static_sem, 1);
 
 			bcm_static_buf->buf_ptr = (unsigned char *)bcm_static_buf + STATIC_BUF_SIZE;
 		}
 
-#if defined(BCMSDIO) || defined(DHD_USE_STATIC_CTRLBUF)
+#ifdef BCMSDIO
 		if (!bcm_static_skb && adapter) {
 			int i;
 			void *skb_buff_ptr = 0;
@@ -474,19 +420,13 @@ int osl_static_mem_init(osl_t *osh, void *adapter)
 			}
 
 			bcopy(skb_buff_ptr, bcm_static_skb, sizeof(struct sk_buff *) *
-				(STATIC_PKT_MAX_NUM));
-			for (i = 0; i < STATIC_PKT_MAX_NUM; i++) {
+				(STATIC_PKT_MAX_NUM * 2 + STATIC_PKT_4PAGE_NUM));
+			for (i = 0; i < STATIC_PKT_MAX_NUM * 2 + STATIC_PKT_4PAGE_NUM; i++)
 				bcm_static_skb->pkt_use[i] = 0;
-			}
 
-#ifdef DHD_USE_STATIC_CTRLBUF
-			spin_lock_init(&bcm_static_skb->osl_pkt_lock);
-			bcm_static_skb->last_allocated_index = 0;
-#else
 			sema_init(&bcm_static_skb->osl_pkt_sem, 1);
-#endif /* DHD_USE_STATIC_CTRLBUF */
 		}
-#endif /* BCMSDIO || DHD_USE_STATIC_CTRLBUF */
+#endif /* BCMSDIO */
 #endif /* CONFIG_DHD_USE_STATIC_BUF */
 
 	return 0;
@@ -515,9 +455,6 @@ osl_detach(osl_t *osh)
 	osl_sec_dma_deinit_elem_mem_block(osh, CMA_BUFSIZE_4K, CMA_BUFNUM, osh->sec_list_base_4096);
 	osl_sec_dma_iounmap(osh, osh->contig_base_va, CMA_MEMBLOCK);
 #endif /* BCM_SECURE_DMA */
-
-
-	bcm_object_trace_deinit();
 
 	ASSERT(osh->magic == OS_HANDLE_MAGIC);
 	atomic_sub(1, &osh->cmn->refcount);
@@ -815,13 +752,8 @@ osl_pkt_frmnative(osl_t *osh, void *pkt)
 }
 
 /* Return a new packet. zero out pkttag */
-#ifdef BCM_OBJECT_TRACE
-void * BCMFASTPATH
-osl_pktget(osl_t *osh, uint len, int line, const char *caller)
-#else
 void * BCMFASTPATH
 osl_pktget(osl_t *osh, uint len)
-#endif /* BCM_OBJECT_TRACE */
 {
 	struct sk_buff *skb;
 	uchar num = 0;
@@ -843,9 +775,6 @@ osl_pktget(osl_t *osh, uint len)
 		skb->priority = 0;
 
 		atomic_inc(&osh->cmn->pktalloced);
-#ifdef BCM_OBJECT_TRACE
-		bcm_object_trace_opr(skb, BCM_OBJDBG_ADD_PKT, caller, line);
-#endif /* BCM_OBJECT_TRACE */
 	}
 
 	return ((void*) skb);
@@ -894,13 +823,8 @@ osl_pktfastfree(osl_t *osh, struct sk_buff *skb)
 #endif /* CTFPOOL */
 
 /* Free the driver packet. Free the tag if present */
-#ifdef BCM_OBJECT_TRACE
-void BCMFASTPATH
-osl_pktfree(osl_t *osh, void *p, bool send, int line, const char *caller)
-#else
 void BCMFASTPATH
 osl_pktfree(osl_t *osh, void *p, bool send)
-#endif /* BCM_OBJECT_TRACE */
 {
 	struct sk_buff *skb, *nskb;
 	if (osh == NULL)
@@ -913,32 +837,12 @@ osl_pktfree(osl_t *osh, void *p, bool send)
 
 	PKTDBG_TRACE(osh, (void *) skb, PKTLIST_PKTFREE);
 
-#if defined(CONFIG_DHD_USE_STATIC_BUF) && defined(DHD_USE_STATIC_CTRLBUF)
-	if (skb && (skb->mac_len == PREALLOC_USED_MAGIC)) {
-		printk("%s: pkt %p is from static pool\n",
-			__FUNCTION__, p);
-		dump_stack();
-		return;
-	}
-
-	if (skb && (skb->mac_len == PREALLOC_FREE_MAGIC)) {
-		printk("%s: pkt %p is from static pool and not in used\n",
-			__FUNCTION__, p);
-		dump_stack();
-		return;
-	}
-#endif /* CONFIG_DHD_USE_STATIC_BUF && DHD_USE_STATIC_CTRLBUF */
-
 	/* perversion: we use skb->next to chain multi-skb packets */
 	while (skb) {
 		nskb = skb->next;
 		skb->next = NULL;
 
 
-
-#ifdef BCM_OBJECT_TRACE
-		bcm_object_trace_opr(skb, BCM_OBJDBG_REMOVE, caller, line);
-#endif /* BCM_OBJECT_TRACE */
 
 #ifdef CTFPOOL
 		if (PKTISFAST(osh, skb)) {
@@ -966,9 +870,6 @@ osl_pktget_static(osl_t *osh, uint len)
 {
 	int i = 0;
 	struct sk_buff *skb;
-#ifdef DHD_USE_STATIC_CTRLBUF
-	unsigned long flags;
-#endif /* DHD_USE_STATIC_CTRLBUF */
 
 	if (!bcm_static_skb)
 		return osl_pktget(osh, len);
@@ -978,57 +879,12 @@ osl_pktget_static(osl_t *osh, uint len)
 		return osl_pktget(osh, len);
 	}
 
-#ifdef DHD_USE_STATIC_CTRLBUF
-	spin_lock_irqsave(&bcm_static_skb->osl_pkt_lock, flags);
-
-	if (len <= DHD_SKB_2PAGE_BUFSIZE) {
-		uint32 index;
-		for (i = 0; i < STATIC_PKT_2PAGE_NUM; i++) {
-			index = bcm_static_skb->last_allocated_index % STATIC_PKT_2PAGE_NUM;
-			bcm_static_skb->last_allocated_index++;
-			if (bcm_static_skb->skb_8k[index] &&
-				bcm_static_skb->pkt_use[index] == 0) {
-				break;
-			}
-		}
-
-		if ((i != STATIC_PKT_2PAGE_NUM) &&
-			(index >= 0) && (index < STATIC_PKT_2PAGE_NUM)) {
-			bcm_static_skb->pkt_use[index] = 1;
-			skb = bcm_static_skb->skb_8k[index];
-			skb->data = skb->head;
-#ifdef NET_SKBUFF_DATA_USES_OFFSET
-			skb_set_tail_pointer(skb, NET_SKB_PAD);
-#else
-			skb->tail = skb->data + NET_SKB_PAD;
-#endif /* NET_SKBUFF_DATA_USES_OFFSET */
-			skb->data += NET_SKB_PAD;
-			skb->cloned = 0;
-			skb->priority = 0;
-#ifdef NET_SKBUFF_DATA_USES_OFFSET
-			skb_set_tail_pointer(skb, len);
-#else
-			skb->tail = skb->data + len;
-#endif /* NET_SKBUFF_DATA_USES_OFFSET */
-			skb->len = len;
-			skb->mac_len = PREALLOC_USED_MAGIC;
-			spin_unlock_irqrestore(&bcm_static_skb->osl_pkt_lock, flags);
-			return skb;
-		}
-	}
-
-	spin_unlock_irqrestore(&bcm_static_skb->osl_pkt_lock, flags);
-	printk("%s: all static pkt in use!\n", __FUNCTION__);
-	return NULL;
-#else
 	down(&bcm_static_skb->osl_pkt_sem);
 
 	if (len <= DHD_SKB_1PAGE_BUFSIZE) {
 		for (i = 0; i < STATIC_PKT_MAX_NUM; i++) {
-			if (bcm_static_skb->skb_4k[i] &&
-				bcm_static_skb->pkt_use[i] == 0) {
+			if (bcm_static_skb->pkt_use[i] == 0)
 				break;
-			}
 		}
 
 		if (i != STATIC_PKT_MAX_NUM) {
@@ -1048,16 +904,15 @@ osl_pktget_static(osl_t *osh, uint len)
 	}
 
 	if (len <= DHD_SKB_2PAGE_BUFSIZE) {
-		for (i = STATIC_PKT_1PAGE_NUM; i < STATIC_PKT_1_2PAGE_NUM; i++) {
-			if (bcm_static_skb->skb_8k[i - STATIC_PKT_1PAGE_NUM] &&
-				bcm_static_skb->pkt_use[i] == 0) {
+		for (i = 0; i < STATIC_PKT_MAX_NUM; i++) {
+			if (bcm_static_skb->pkt_use[i + STATIC_PKT_MAX_NUM]
+				== 0)
 				break;
-			}
 		}
 
-		if ((i >= STATIC_PKT_1PAGE_NUM) && (i < STATIC_PKT_1_2PAGE_NUM)) {
-			bcm_static_skb->pkt_use[i] = 1;
-			skb = bcm_static_skb->skb_8k[i - STATIC_PKT_1PAGE_NUM];
+		if (i != STATIC_PKT_MAX_NUM) {
+			bcm_static_skb->pkt_use[i + STATIC_PKT_MAX_NUM] = 1;
+			skb = bcm_static_skb->skb_8k[i];
 #ifdef NET_SKBUFF_DATA_USES_OFFSET
 			skb_set_tail_pointer(skb, len);
 #else
@@ -1071,9 +926,8 @@ osl_pktget_static(osl_t *osh, uint len)
 	}
 
 #if defined(ENHANCED_STATIC_BUF)
-	if (bcm_static_skb->skb_16k &&
-		bcm_static_skb->pkt_use[STATIC_PKT_MAX_NUM - 1] == 0) {
-		bcm_static_skb->pkt_use[STATIC_PKT_MAX_NUM - 1] = 1;
+	if (bcm_static_skb->pkt_use[STATIC_PKT_MAX_NUM * 2] == 0) {
+		bcm_static_skb->pkt_use[STATIC_PKT_MAX_NUM * 2] = 1;
 
 		skb = bcm_static_skb->skb_16k;
 #ifdef NET_SKBUFF_DATA_USES_OFFSET
@@ -1091,55 +945,19 @@ osl_pktget_static(osl_t *osh, uint len)
 	up(&bcm_static_skb->osl_pkt_sem);
 	printk("%s: all static pkt in use!\n", __FUNCTION__);
 	return osl_pktget(osh, len);
-#endif /* DHD_USE_STATIC_CTRLBUF */
 }
 
 void
 osl_pktfree_static(osl_t *osh, void *p, bool send)
 {
 	int i;
-#ifdef DHD_USE_STATIC_CTRLBUF
-	struct sk_buff *skb = (struct sk_buff *)p;
-	unsigned long flags;
-#endif /* DHD_USE_STATIC_CTRLBUF */
-
-	if (!p) {
-		return;
-	}
-
 	if (!bcm_static_skb) {
 		osl_pktfree(osh, p, send);
 		return;
 	}
 
-#ifdef DHD_USE_STATIC_CTRLBUF
-	spin_lock_irqsave(&bcm_static_skb->osl_pkt_lock, flags);
-
-	for (i = 0; i < STATIC_PKT_2PAGE_NUM; i++) {
-		if (p == bcm_static_skb->skb_8k[i]) {
-			if (bcm_static_skb->pkt_use[i] == 0) {
-				printk("%s: static pkt idx %d(%p) is double free\n",
-					__FUNCTION__, i, p);
-			} else {
-				bcm_static_skb->pkt_use[i] = 0;
-			}
-
-			if (skb->mac_len != PREALLOC_USED_MAGIC) {
-				printk("%s: static pkt idx %d(%p) is not in used\n",
-					__FUNCTION__, i, p);
-			}
-
-			skb->mac_len = PREALLOC_FREE_MAGIC;
-			spin_unlock_irqrestore(&bcm_static_skb->osl_pkt_lock, flags);
-			return;
-		}
-	}
-
-	spin_unlock_irqrestore(&bcm_static_skb->osl_pkt_lock, flags);
-	printk("%s: packet %p does not exist in the pool\n", __FUNCTION__, p);
-#else
 	down(&bcm_static_skb->osl_pkt_sem);
-	for (i = 0; i < STATIC_PKT_1PAGE_NUM; i++) {
+	for (i = 0; i < STATIC_PKT_MAX_NUM; i++) {
 		if (p == bcm_static_skb->skb_4k[i]) {
 			bcm_static_skb->pkt_use[i] = 0;
 			up(&bcm_static_skb->osl_pkt_sem);
@@ -1147,23 +965,22 @@ osl_pktfree_static(osl_t *osh, void *p, bool send)
 		}
 	}
 
-	for (i = STATIC_PKT_1PAGE_NUM; i < STATIC_PKT_1_2PAGE_NUM; i++) {
-		if (p == bcm_static_skb->skb_8k[i - STATIC_PKT_1PAGE_NUM]) {
-			bcm_static_skb->pkt_use[i] = 0;
+	for (i = 0; i < STATIC_PKT_MAX_NUM; i++) {
+		if (p == bcm_static_skb->skb_8k[i]) {
+			bcm_static_skb->pkt_use[i + STATIC_PKT_MAX_NUM] = 0;
 			up(&bcm_static_skb->osl_pkt_sem);
 			return;
 		}
 	}
 #ifdef ENHANCED_STATIC_BUF
 	if (p == bcm_static_skb->skb_16k) {
-		bcm_static_skb->pkt_use[STATIC_PKT_MAX_NUM - 1] = 0;
+		bcm_static_skb->pkt_use[STATIC_PKT_MAX_NUM * 2] = 0;
 		up(&bcm_static_skb->osl_pkt_sem);
 		return;
 	}
 #endif
 	up(&bcm_static_skb->osl_pkt_sem);
 	osl_pktfree(osh, p, send);
-#endif /* DHD_USE_STATIC_CTRLBUF */
 }
 #endif /* CONFIG_DHD_USE_STATIC_BUF */
 
@@ -1599,13 +1416,8 @@ osl_sleep(uint ms)
 /* Clone a packet.
  * The pkttag contents are NOT cloned.
  */
-#ifdef BCM_OBJECT_TRACE
-void *
-osl_pktdup(osl_t *osh, void *skb, int line, const char *caller)
-#else
 void *
 osl_pktdup(osl_t *osh, void *skb)
-#endif /* BCM_OBJECT_TRACE */
 {
 	void * p;
 
@@ -1653,10 +1465,6 @@ osl_pktdup(osl_t *osh, void *skb)
 
 	/* Increment the packet counter */
 	atomic_inc(&osh->cmn->pktalloced);
-#ifdef BCM_OBJECT_TRACE
-	bcm_object_trace_opr(p, BCM_OBJDBG_ADD_PKT, caller, line);
-#endif /* BCM_OBJECT_TRACE */
-
 	return (p);
 }
 

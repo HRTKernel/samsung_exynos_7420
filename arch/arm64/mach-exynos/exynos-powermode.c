@@ -668,8 +668,7 @@ void exynos_prepare_sys_powerdown(enum sys_powerdown mode)
 	case SYS_ALPA:
 		exynos_ctrl_alpa(true);
 	case SYS_LPA:
-		if(!exynos_lpa_enter())
-			exynos_aud_alpa_notifier(true);
+		exynos_lpa_enter();
 		break;
 	case SYS_SLEEP:
 		break;
@@ -700,7 +699,6 @@ void exynos_wakeup_sys_powerdown(enum sys_powerdown mode, bool early_wakeup)
 		exynos_ctrl_alpa(false);
 	case SYS_LPA:
 		exynos_lpa_exit();
-		exynos_aud_alpa_notifier(false);
 		break;
 	case SYS_SLEEP:
 #if defined(CONFIG_SOC_EXYNOS7420)

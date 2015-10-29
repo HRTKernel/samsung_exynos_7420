@@ -16,11 +16,11 @@
  * Function signature: void exynos_smc(u64 cmd, u64 arg1, u64 arg2, u64 arg3)
  */
 
-ENTRY(_exynos_smc)
+ENTRY(exynos_smc)
 	dsb	sy
 	smc	#0
 	ret
-ENDPROC(_exynos_smc)
+ENDPROC(exynos_smc)
 
 ENTRY(exynos_smc_readsfr)
 	stp	x1, x3, [sp, #-16]!

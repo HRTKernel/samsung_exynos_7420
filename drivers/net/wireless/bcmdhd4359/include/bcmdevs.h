@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: bcmdevs.h 557398 2015-05-19 00:42:56Z $
+ * $Id: bcmdevs.h 541060 2015-03-13 23:28:01Z $
  */
 
 #ifndef	_BCMDEVS_H
@@ -398,7 +398,6 @@
 				(CHIPID(chipid) == BCM43556_CHIP_ID) || \
 				(CHIPID(chipid) == BCM43558_CHIP_ID) || \
 				(CHIPID(chipid) == BCM43566_CHIP_ID) || \
-				(CHIPID(chipid) == BCM43567_CHIP_ID) || \
 				(CHIPID(chipid) == BCM43568_CHIP_ID) || \
 				(CHIPID(chipid) == BCM43569_CHIP_ID) || \
 				(CHIPID(chipid) == BCM43570_CHIP_ID) || \

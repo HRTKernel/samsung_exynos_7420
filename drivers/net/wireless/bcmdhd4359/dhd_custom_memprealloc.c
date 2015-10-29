@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_custom_memprealloc.c 565790 2015-06-23 06:57:52Z $
+ * $Id: dhd_custom_memprealloc.c 536912 2015-02-24 16:09:31Z $
  */
 
 #include <linux/device.h>
@@ -53,11 +53,11 @@
 #define WLAN_SCAN_BUF_SIZE		(64 * 1024)
 
 #if defined(CONFIG_64BIT)
-#define WLAN_DHD_INFO_BUF_SIZE		(32 * 1024)
+#define WLAN_DHD_INFO_BUF_SIZE		(24 * 1024)
 #define WLAN_DHD_WLFC_BUF_SIZE		(64 * 1024)
 #define WLAN_DHD_IF_FLOW_LKUP_SIZE	(64 * 1024)
 #else
-#define WLAN_DHD_INFO_BUF_SIZE		(32 * 1024)
+#define WLAN_DHD_INFO_BUF_SIZE		(16 * 1024)
 #define WLAN_DHD_WLFC_BUF_SIZE		(16 * 1024)
 #define WLAN_DHD_IF_FLOW_LKUP_SIZE	(20 * 1024)
 #endif /* CONFIG_64BIT */

@@ -105,8 +105,7 @@ static int check_event_type(enum otg_notify_events event)
 		break;
 	case NOTIFY_EVENT_HOST:
 	case NOTIFY_EVENT_HMT:
-		ret |= (NOTIFY_EVENT_STATE | NOTIFY_EVENT_NEED_VBUSDRIVE
-				| NOTIFY_EVENT_DELAY);
+		ret |= (NOTIFY_EVENT_STATE | NOTIFY_EVENT_NEED_VBUSDRIVE);
 		break;
 	case NOTIFY_EVENT_DISABLE_NOTIFY:
 		ret |= (NOTIFY_EVENT_STATE | NOTIFY_EVENT_NOBLOCKING

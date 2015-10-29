@@ -67,11 +67,7 @@ int BCMFASTPATH dhd_flow_queue_overflow(flow_queue_t *queue, void *pkt);
 #define FLOW_QUEUE_PKT_NEXT(p)          PKTLINK(p)
 #define FLOW_QUEUE_PKT_SETNEXT(p, x)    PKTSETLINK((p), (x))
 
-#ifdef DHD_LOSSLESS_ROAMING
-const uint8 prio2ac[8] = { 0, 1, 1, 0, 2, 2, 3, 7 };
-#else
 const uint8 prio2ac[8] = { 0, 1, 1, 0, 2, 2, 3, 3 };
-#endif
 const uint8 prio2tid[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
 /** Queue overflow throttle. Return value: TRUE if throttle needs to be applied */
@@ -253,7 +249,6 @@ dhd_flow_rings_init(dhd_pub_t *dhdp, uint32 num_flow_rings)
 	flow_ring_table_t *flow_ring_table = NULL;
 	if_flow_lkup_t *if_flow_lkup = NULL;
 	void *lock = NULL;
-	void *list_lock = NULL;
 	unsigned long flags;
 
 	DHD_INFO(("%s\n", __FUNCTION__));
@@ -315,15 +310,9 @@ dhd_flow_rings_init(dhd_pub_t *dhdp, uint32 num_flow_rings)
 	if (lock == NULL)
 		goto fail;
 
-	list_lock = dhd_os_spin_lock_init(dhdp->osh);
-	if (list_lock == NULL)
-		goto lock_fail;
-
 	dhdp->flow_prio_map_type = DHD_FLOW_PRIO_AC_MAP;
 	bcopy(prio2ac, dhdp->flow_prio_map, sizeof(uint8) * NUMPRIO);
-#ifdef DHD_LOSSLESS_ROAMING
-	dhdp->dequeue_prec_map = ALLPRIO;
-#endif
+
 	/* Now populate into dhd pub */
 	DHD_FLOWID_LOCK(lock, flags);
 	dhdp->num_flow_rings = num_flow_rings;
@@ -332,15 +321,10 @@ dhd_flow_rings_init(dhd_pub_t *dhdp, uint32 num_flow_rings)
 	dhdp->if_flow_lkup = (void *)if_flow_lkup;
 	dhdp->flowid_lock = lock;
 	dhdp->flow_rings_inited = TRUE;
-	dhdp->flowring_list_lock = list_lock;
 	DHD_FLOWID_UNLOCK(lock, flags);
 
 	DHD_INFO(("%s done\n", __FUNCTION__));
 	return BCME_OK;
-
-lock_fail:
-	/* deinit the spinlock */
-	dhd_os_spin_lock_deinit(dhdp->osh, lock);
 
 fail:
 	/* Destruct the per interface flow lkup table */
@@ -423,9 +407,6 @@ void dhd_flow_rings_deinit(dhd_pub_t *dhdp)
 
 	DHD_FLOWID_UNLOCK(lock, flags);
 	dhd_os_spin_lock_deinit(dhdp->osh, lock);
-
-	dhd_os_spin_lock_deinit(dhdp->osh, dhdp->flowring_list_lock);
-	dhdp->flowring_list_lock = NULL;
 
 	ASSERT(dhdp->if_flow_lkup == NULL);
 	ASSERT(dhdp->flowid_allocator == NULL);
@@ -647,9 +628,9 @@ dhd_flowid_lookup(dhd_pub_t *dhdp, uint8 ifindex,
 	flow_ring_node->active = TRUE;
 	flow_ring_node->status = FLOW_RING_STATUS_PENDING;
 	DHD_FLOWRING_UNLOCK(flow_ring_node->lock, flags);
-	DHD_FLOWRING_LIST_LOCK(dhdp->flowring_list_lock, flags);
+	DHD_FLOWID_LOCK(dhdp->flowid_lock, flags);
 	dll_prepend(&dhdp->bus->const_flowring, &flow_ring_node->list);
-	DHD_FLOWRING_LIST_UNLOCK(dhdp->flowring_list_lock, flags);
+	DHD_FLOWID_UNLOCK(dhdp->flowid_lock, flags);
 
 	/* Create and inform device about the new flow */
 	if (dhd_bus_flow_ring_create_request(dhdp->bus, (void *)flow_ring_node)

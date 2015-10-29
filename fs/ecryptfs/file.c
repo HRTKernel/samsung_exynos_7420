@@ -274,10 +274,10 @@ static void ecryptfs_set_rapages(struct file *file, unsigned int flag)
 	if (!flag)
 		file->f_ra.ra_pages = 0;
 	else
-		file->f_ra.ra_pages = (unsigned int)file->f_mapping->backing_dev_info->ra_pages;
+		file->f_ra.ra_pages = file->f_mapping->backing_dev_info->ra_pages;
 }
 
-static int ecryptfs_set_fmpinfo(struct file *file, struct inode *inode, unsigned int set_flag)
+static void ecryptfs_set_fmpinfo(struct file *file, struct inode *inode, unsigned int set_flag)
 {
 	struct address_space *mapping = file->f_mapping;
 
@@ -287,18 +287,6 @@ static int ecryptfs_set_fmpinfo(struct file *file, struct inode *inode, unsigned
 		struct ecryptfs_mount_crypt_stat *mount_crypt_stat =
 			&ecryptfs_superblock_to_private(inode->i_sb)->mount_crypt_stat;
 
-		if (strncmp(crypt_stat->cipher, "aesxts", sizeof("aesxts"))
-			&& strncmp(crypt_stat->cipher, "aes", sizeof("aes"))) {
-			if (!(crypt_stat->flags & ECRYPTFS_ENCRYPTED)) {
-				mapping->plain_text = 1;
-				return 0;
-			} else {
-				ecryptfs_printk(KERN_ERR,
-						"%s: Error invalid file encryption algorithm, inode %lu, filename %s alg %s\n"
-						, __func__, inode->i_ino,  file->f_dentry->d_name.name, crypt_stat->cipher);
-				return -EINVAL;
-			}
-		}
 		mapping->iv = crypt_stat->root_iv;
 		mapping->key = crypt_stat->key;
 		mapping->sensitive_data_index = crypt_stat->metadata_size/4096;
@@ -324,10 +312,7 @@ static int ecryptfs_set_fmpinfo(struct file *file, struct inode *inode, unsigned
 #ifdef CONFIG_CRYPTO_FIPS
 		mapping->cc_enable = 0;
 #endif
-		mapping->plain_text = 0;
 	}
-
-	return 0;
 }
 
 void ecryptfs_propagate_rapages(struct file *file, unsigned int flag)
@@ -342,18 +327,15 @@ void ecryptfs_propagate_rapages(struct file *file, unsigned int flag)
 
 }
 
-int ecryptfs_propagate_fmpinfo(struct inode *inode, unsigned int flag)
+void ecryptfs_propagate_fmpinfo(struct inode *inode, unsigned int flag)
 {
 	struct file *f = ecryptfs_inode_to_private(inode)->lower_file;
 
 	do {
 		if (!f)
-			return 0;
-		if (ecryptfs_set_fmpinfo(f, inode, flag))
-			return -EINVAL;
+			return;
+		ecryptfs_set_fmpinfo(f, inode, flag);
 	} while(f->f_op->get_lower_file && (f = f->f_op->get_lower_file(f)));
-
-	return 0;
 }
 #endif
 
@@ -462,12 +444,10 @@ static int ecryptfs_open(struct inode *inode, struct file *file)
 
 #if defined(CONFIG_MMC_DW_FMP_ECRYPT_FS) || defined(CONFIG_UFS_FMP_ECRYPT_FS)
 	if (mount_crypt_stat->flags & ECRYPTFS_USE_FMP)
-		rc = ecryptfs_propagate_fmpinfo(inode, FMPINFO_SET);
+		ecryptfs_propagate_fmpinfo(inode, FMPINFO_SET);
 	else
-		rc = ecryptfs_propagate_fmpinfo(inode, FMPINFO_CLEAR);
+		ecryptfs_propagate_fmpinfo(inode, FMPINFO_CLEAR);
 #endif
-	if (rc)
-		goto out_put;
 
 #ifdef CONFIG_SDP
 	if (crypt_stat->flags & ECRYPTFS_DEK_IS_SENSITIVE) {

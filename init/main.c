@@ -111,10 +111,7 @@ extern void tc_init(void);
 int boot_mode_security;
 EXPORT_SYMBOL(boot_mode_security);
 #endif
-#ifdef CONFIG_TIMA_RKP
-int rkp_support_large_memory;
-EXPORT_SYMBOL(rkp_support_large_memory);
-#endif
+
 /*
  * Debug helper: via this flag we know that we are in 'early bootup code'
  * where only the boot processor is running with IRQ disabled.  This means
@@ -519,9 +516,8 @@ static void rkp_init(void)
 	init.extra_memory_size = 0x600000;
 	init._srodata = (u64) __start_rodata;
 	init._erodata =(u64) __end_rodata;
-	init.large_memory = rkp_support_large_memory;
-	rkp_call(RKP_INIT, (u64)&init, 0, 0, 0, 0);
 	rkp_started = 1;
+	rkp_call(RKP_INIT, (u64)&init, 0, 0, 0, 0);
 	return;
 }
 #endif

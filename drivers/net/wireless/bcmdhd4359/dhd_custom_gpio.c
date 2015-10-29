@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_custom_gpio.c 556083 2015-05-12 14:03:00Z $
+ * $Id: dhd_custom_gpio.c 514727 2014-11-12 03:02:48Z $
  */
 
 #include <typedefs.h>
@@ -209,12 +209,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 *  input : ISO 3166-1 country abbreviation
 *  output: customized cspec
 */
-#ifdef CUSTOM_COUNTRY_COD
-void get_customized_country_code(void *adapter, char *country_iso_code,
-  wl_country_t *cspec, u32 flags)
-#else
 void get_customized_country_code(void *adapter, char *country_iso_code, wl_country_t *cspec)
-#endif /* CUSTOM_COUNTRY_CODE */
 {
 	int size, i;
 
